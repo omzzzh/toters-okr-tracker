@@ -76,6 +76,13 @@ const useStore = create((set, get) => {
     userName: '',
     collapsedQuarters: new Set(),
 
+    // Modals
+    weekModalOpen: false,
+    weekModalEditId: null,
+    projectModalOpen: false,
+    projectModalEditId: null,
+    weekDropdownOpen: false,
+
     // Filters
     filters: { status: '', owner: '', vertical: 'all', search: '', sort: 'default' },
     analyticsFilters: { vertical: 'all', status: '', phase: '', owner: '', search: '', sort: 'name' },
@@ -84,6 +91,13 @@ const useStore = create((set, get) => {
     gridQuarter: 'all',
     gridVertical: 'all',
     gridSearch: '',
+
+    // ── Modal actions ──
+    openWeekModal: (id = null) => set({ weekModalOpen: true, weekModalEditId: id, weekDropdownOpen: false }),
+    closeWeekModal: () => set({ weekModalOpen: false, weekModalEditId: null }),
+    openProjectModal: (id = null) => set({ projectModalOpen: true, projectModalEditId: id }),
+    closeProjectModal: () => set({ projectModalOpen: false, projectModalEditId: null }),
+    setWeekDropdownOpen: (v) => set({ weekDropdownOpen: v }),
 
     // ── Navigation ──
     setActiveView: (v) => set({ activeView: v }),
