@@ -591,3 +591,15 @@ input,textarea,select{font:inherit}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--paper3);border-radius:3px}
 select option{background:var(--white)}
+
+/* ── Auth / Login ──────────────────────────────────────────────────────────── */
+@keyframes spin{to{transform:rotate(360deg)}}
+.login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--paper);padding:20px}
+.login-card{background:var(--white);border:1px solid var(--rule);border-radius:16px;padding:48px 44px;width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:20px;box-shadow:0 4px 24px rgba(0,0,0,.07)}
+.login-logo{display:flex;align-items:center;gap:12px}
+.login-desc{font-size:13.5px;color:var(--ink3);text-align:center;line-height:1.6;max-width:280px}
+.login-error{background:var(--red-bg);color:var(--red);border:1px solid #f5c6c2;border-radius:var(--r);padding:10px 14px;font-size:12.5px;text-align:center;width:100%}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px 20px;border-radius:var(--r);border:1.5px solid var(--rule2);background:var(--white);font-family:var(--sans);font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;transition:all .15s}
+.btn-google:hover{border-color:var(--ink3);background:var(--paper)}
+.btn-google:disabled{opacity:.6;cursor:not-allowed}
+.login-note{font-size:11px;color:var(--ink4);text-align:center}

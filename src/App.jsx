@@ -6,6 +6,7 @@ import Sidebar from './components/layout/Sidebar';
 import SubNav from './components/layout/SubNav';
 import WeekModal from './components/layout/WeekModal';
 import ProjectModal from './components/layout/ProjectModal';
+import AuthGate, { AuthContext } from './components/AuthGate';
 import OKRPage from './pages/OKRPage';
 import ExecPage from './pages/ExecPage';
 import GridPage from './pages/GridPage';
@@ -19,12 +20,19 @@ import TeamPage from './pages/TeamPage';
 export const ToastCtx = createContext(null);
 export const useToastCtx = () => useContext(ToastCtx);
 
-export default function App() {
+function AppInner() {
   const { toast, showToast } = useToast();
-  const activeView = useStore(s => s.activeView);
-  const settings = useStore(s => s.settings);
-
+  const activeView  = useStore(s => s.activeView);
+  const settings    = useStore(s => s.settings);
+  const setUserName = useStore(s => s.setUserName);
+  const userName    = useStore(s => s.userName);
   const loadFromSheets = useStore(s => s.loadFromSheets);
+  const { user } = useContext(AuthContext);
+
+  // Auto-fill userName from Google account on first login
+  useEffect(() => {
+    if (user?.displayName && !userName) setUserName(user.displayName);
+  }, [user]);
 
   useEffect(() => {
     if (settings.ejsPK && window.emailjs) {
@@ -32,9 +40,7 @@ export default function App() {
     }
   }, [settings.ejsPK]);
 
-  useEffect(() => {
-    loadFromSheets();
-  }, []);
+  useEffect(() => { loadFromSheets(); }, []);
 
   const pages = {
     okr: OKRPage, exec: ExecPage, grid: GridPage,
@@ -58,5 +64,13 @@ export default function App() {
       <ProjectModal />
       <div className={'toast' + (toast.show ? ' show' : '')}>{toast.msg}</div>
     </ToastCtx.Provider>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthGate>
+      <AppInner />
+    </AuthGate>
   );
 }

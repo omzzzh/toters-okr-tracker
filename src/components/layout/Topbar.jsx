@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import useStore from '../../store/index';
 import { SCRIPT_URL as CONFIG_SCRIPT_URL } from '../../config';
+import { AuthContext } from '../AuthGate';
 
 export default function Topbar() {
+  const { signOut } = useContext(AuthContext);
   const userName = useStore(s => s.userName);
   const setUserName = useStore(s => s.setUserName);
   const openProjectModal = useStore(s => s.openProjectModal);
@@ -98,6 +100,9 @@ export default function Topbar() {
           )}
           <button className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 11px' }} onClick={() => openProjectModal()}>
             + Project
+          </button>
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '5px 9px', color: 'var(--ink3)' }} onClick={signOut} title="Sign out">
+            Sign out
           </button>
         </div>
       </div>
