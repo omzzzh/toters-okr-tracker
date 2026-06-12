@@ -45,15 +45,77 @@ export default function OwnerPicker({ value, onChange, team, compact = false }) 
     (m.role || '').toLowerCase().includes(q.toLowerCase())
   );
 
+  if (compact) {
+    return (
+      <div className="owner-picker" ref={ref} style={{ minWidth: 0 }}>
+        <div
+          onClick={() => setOpen(o => !o)}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', flexWrap: 'wrap' }}
+        >
+          {selected.length === 0 ? (
+            <span style={{ color: 'var(--ink4)', fontSize: 11 }}>—</span>
+          ) : (
+            selected.map(n => {
+              const m = team.find(t => t.name === n);
+              return (
+                <span key={n} className="owner-chip owner-chip-sm" style={{ cursor: 'pointer' }}>
+                  <span className="owner-chip-av" style={{ background: m?.color || '#9ca3af' }}>{initials(n)}</span>
+                  <span className="owner-chip-name">{n}</span>
+                </span>
+              );
+            })
+          )}
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="none" style={{ opacity: .35, flexShrink: 0 }}>
+            <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </div>
+        {open && (
+          <div className="owner-picker-dropdown" style={{ minWidth: 200 }}>
+            <input
+              className="owner-picker-search"
+              placeholder="Search team…"
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              onClick={e => e.stopPropagation()}
+              autoFocus
+            />
+            <div className="owner-picker-list">
+              {filtered.map(m => (
+                <div
+                  key={m.id || m.name}
+                  className={'owner-picker-item' + (selected.includes(m.name) ? ' selected' : '')}
+                  style={{ padding: '6px 12px' }}
+                  onClick={e => { e.stopPropagation(); toggle(m.name); }}
+                >
+                  <div className="owner-picker-av" style={{ background: m.color, width: 22, height: 22, fontSize: 9 }}>{initials(m.name)}</div>
+                  <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500 }}>{m.name}</div>
+                  {selected.includes(m.name) && <span style={{ color: 'var(--accent)', fontSize: 12 }}>✓</span>}
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--ink3)' }}>No matches.</div>
+              )}
+            </div>
+            {selected.length > 0 && (
+              <div className="owner-picker-footer">
+                <span style={{ fontSize: 11, color: 'var(--ink3)' }}>{selected.length} selected</span>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 8px' }} onClick={e => { e.stopPropagation(); onChange(''); }}>Clear</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="owner-picker" ref={ref} style={compact ? { minWidth: 0 } : undefined}>
+    <div className="owner-picker" ref={ref}>
       <div
         className={'owner-picker-trigger' + (open ? ' open' : '')}
         onClick={() => setOpen(o => !o)}
-        style={compact ? { minHeight: 28, padding: '3px 8px', fontSize: 12 } : undefined}
       >
         {selected.length === 0 ? (
-          <span style={{ color: 'var(--ink4)' }}>{compact ? '—' : 'Select owners…'}</span>
+          <span style={{ color: 'var(--ink4)' }}>Select owners…</span>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
             {selected.map(n => {
