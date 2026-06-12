@@ -80,6 +80,38 @@ const loadInitialState = () => {
   return { projects, weeks, weekData, changeLog, okrScores, aiCache, colCfg, settings, team };
 };
 
+// ── One-time name migration ───────────────────────
+const NAME_MAP = {
+  'Marwa Stephan':   'Marwa Stouhi',
+  'Ahmad Lahham':    'Ahmad Louay Soussi',
+  'Charbel Sassine': 'Charbel Safi',
+  'Ahmad Ataya':     'Ahmad Alame',
+  'Adnan Diab':      'Adnan Dimashki',
+  'Ahmad Hamdan':    'Ahmad Haidar',
+  'Omar Barakat':    'Omar Hmayssi',
+};
+const rn = (n) => NAME_MAP[n] || n;
+
+function applyNameMigration(state) {
+  if (lsGet('tok_names_migrated_v1')) return state;
+  const team      = (state.team || []).map(m => ({ ...m, name: rn(m.name) }));
+  const projects  = (state.projects || []).map(p => ({ ...p, owner: rn(p.owner) }));
+  const changeLog = (state.changeLog || []).map(e => ({ ...e, by: rn(e.by) }));
+  const weekData  = Object.fromEntries(
+    Object.entries(state.weekData || {}).map(([wid, wk]) => [
+      wid,
+      Object.fromEntries(
+        Object.entries(wk).map(([pid, pd]) => [
+          pid,
+          { ...pd, comments: (pd.comments || []).map(c => ({ ...c, author: rn(c.author) })) },
+        ])
+      ),
+    ])
+  );
+  lsSet('tok_names_migrated_v1', true);
+  return { ...state, team, projects, changeLog, weekData };
+}
+
 // ── Debounced push to Firestore ───────────────────
 let _pushTimer = null;
 let _unsubscribeFirestore = null;
@@ -350,8 +382,10 @@ const useStore = create((set, get) => {
       try {
         const pulled = await pullFromFirestore();
         if (pulled && (pulled.projects?.length > 0 || pulled.weeks?.length > 0)) {
-          set({ ...pulled, syncStatus: 'synced', lastSynced: Date.now() });
+          const patched = applyNameMigration(pulled);
+          set({ ...patched, syncStatus: 'synced', lastSynced: Date.now() });
           localSave(get());
+          if (patched !== pulled) await pushToFirestore(get());
         } else {
           // Firestore is empty — push local state up to initialise it
           await pushToFirestore(get());
