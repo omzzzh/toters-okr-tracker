@@ -9,37 +9,21 @@ export default function WeekModal() {
   const closeWeekModal = useStore(s => s.closeWeekModal);
   const weeks = useStore(s => s.weeks);
   const addWeek = useStore(s => s.addWeek);
-  const renameWeek = useStore(s => s.renameWeek);
-  const deleteWeek = useStore(s => s.deleteWeek);
-  const setActiveWeek = useStore(s => s.setActiveWeek);
   const showToast = useToastCtx();
 
-  const [tab, setTab] = useState('new'); // 'new' | 'edit'
   const [label, setLabel] = useState('');
-  const [quarter, setQuarter] = useState('');
+  const [quarter, setQuarter] = useState('Q2 2026');
   const [copyFrom, setCopyFrom] = useState('');
-  const [useDate, setUseDate] = useState(true);
   const [dateVal, setDateVal] = useState('');
-
-  const editWeek = weeks.find(w => w.id === editId);
 
   useEffect(() => {
     if (!open) return;
-    if (editId && editWeek) {
-      setTab('edit');
-      setLabel(editWeek.label);
-      setQuarter(editWeek.quarter || '');
-    } else {
-      setTab('new');
-      // Default to current week's Monday
-      const mon = getMonday(new Date());
-      const iso = mon.toISOString().slice(0, 10);
-      setDateVal(iso);
-      setLabel(formatWeekLabel(mon));
-      setQuarter(quarterFromMonday(mon));
-      setCopyFrom(weeks[0]?.id || '');
-    }
-  }, [open, editId]);
+    const mon = getMonday(new Date());
+    setDateVal(mon.toISOString().slice(0, 10));
+    setLabel(formatWeekLabel(mon));
+    setQuarter(quarterFromMonday(mon));
+    setCopyFrom(weeks[0]?.id || '');
+  }, [open]);
 
   const handleDateChange = (val) => {
     setDateVal(val);
@@ -52,48 +36,23 @@ export default function WeekModal() {
 
   const handleSave = () => {
     if (!label.trim()) return;
-    if (tab === 'edit' && editId) {
-      renameWeek(editId, label.trim());
-      showToast('Week updated');
-    } else {
-      const id = addWeek(label.trim(), quarter.trim(), copyFrom || null);
-      setActiveWeek(id);
-      showToast('Week created');
-    }
-    closeWeekModal();
-  };
-
-  const handleDelete = () => {
-    if (!editId) return;
-    if (!confirm(`Delete week "${editWeek?.label}"? This cannot be undone.`)) return;
-    deleteWeek(editId);
-    showToast('Week deleted');
+    addWeek(label.trim(), quarter.trim(), copyFrom || null);
+    showToast('✓ Week created');
     closeWeekModal();
   };
 
   if (!open) return null;
 
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeWeekModal()}>
+    <div className="modal-bg open" onClick={e => e.target === e.currentTarget && closeWeekModal()}>
       <div className="modal">
-        <h2>{editId ? 'Edit Week' : 'New Week'}</h2>
-
-        {!editId && (
-          <div className="modal-tabs">
-            <div className={'modal-tab' + (tab === 'new' ? ' active' : '')} onClick={() => setTab('new')}>Create from date</div>
-            <div className={'modal-tab' + (tab === 'manual' ? ' active' : '')} onClick={() => setTab('manual')}>Manual</div>
-          </div>
-        )}
-
-        {tab === 'new' && !editId && (
-          <div className="modal-field">
-            <label>Pick any day in the week</label>
-            <input type="date" value={dateVal} onChange={e => handleDateChange(e.target.value)} />
-          </div>
-        )}
-
-        <div className="modal-field">
-          <label>Week Label</label>
+        <div className="modal-title">Add week</div>
+        <div className="mf">
+          <label>Pick any day in the week</label>
+          <input type="date" value={dateVal} onChange={e => handleDateChange(e.target.value)} />
+        </div>
+        <div className="mf">
+          <label>Week label</label>
           <input
             type="text"
             placeholder="e.g. Apr 27 – May 1, 2026"
@@ -101,35 +60,27 @@ export default function WeekModal() {
             onChange={e => setLabel(e.target.value)}
           />
         </div>
-
-        <div className="modal-field">
+        <div className="mf">
           <label>Quarter</label>
-          <input
-            type="text"
-            placeholder="e.g. Q2 2026"
-            value={quarter}
-            onChange={e => setQuarter(e.target.value)}
-          />
+          <select value={quarter} onChange={e => setQuarter(e.target.value)}>
+            {['Q1 2026','Q2 2026','Q3 2026','Q4 2026','Q1 2027','Q2 2027'].map(q =>
+              <option key={q} value={q}>{q}</option>
+            )}
+          </select>
         </div>
-
-        {!editId && (
-          <div className="modal-field">
-            <label>Copy statuses from</label>
-            <select value={copyFrom} onChange={e => setCopyFrom(e.target.value)}>
-              <option value="">— blank —</option>
-              {weeks.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
-            </select>
+        <div className="mf">
+          <label>Copy from prior week</label>
+          <select value={copyFrom} onChange={e => setCopyFrom(e.target.value)}>
+            <option value="">— Start blank —</option>
+            {weeks.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
+          </select>
+          <div style={{ fontSize: 11.5, color: 'var(--ink3)', marginTop: 5, lineHeight: 1.5 }}>
+            Copied content will appear in light grey until each PM saves their update for the new week.
           </div>
-        )}
-
-        <div className="modal-actions">
-          {editId && (
-            <button className="btn danger" onClick={handleDelete}>Delete Week</button>
-          )}
-          <button className="btn" onClick={closeWeekModal}>Cancel</button>
-          <button className="btn primary" onClick={handleSave}>
-            {editId ? 'Save Changes' : 'Create Week'}
-          </button>
+        </div>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" onClick={closeWeekModal}>Cancel</button>
+          <button className="btn btn-save" onClick={handleSave}>Add week</button>
         </div>
       </div>
     </div>

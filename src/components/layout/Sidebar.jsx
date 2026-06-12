@@ -1,32 +1,198 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import useStore from '../../store/index';
 
-const VIEWS = [
-  { id: 'okr',       label: 'OKR Tracker',  icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
-  { id: 'exec',      label: 'Exec Summary', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
-  { id: 'grid',      label: 'Project Grid', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg> },
-  { id: 'analytics', label: 'Analytics',    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
-  { id: 'scoring',   label: 'OKR Scoring',  icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> },
-  { id: 'settings',  label: 'Settings',     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> },
+const SECTIONS = [
+  {
+    views: [
+      { id: 'exec', label: 'Executive Summary', icon: '📊' },
+    ],
+  },
+  {
+    views: [
+      { id: 'okr',    label: 'OKR Tracker',  icon: '📋' },
+      { id: 'kanban', label: 'Kanban Board',  icon: '🗂' },
+    ],
+  },
+  {
+    views: [
+      { id: 'analytics', label: 'Performance', icon: '⚡' },
+      { id: 'scoring',   label: 'OKR Scoring', icon: '🎯' },
+    ],
+  },
+  {
+    views: [
+      { id: 'grid',    label: 'Project Grid',   icon: '⊞' },
+      { id: 'project', label: 'Project Detail', icon: '🔍' },
+    ],
+  },
+  {
+    views: [
+      { id: 'team', label: 'Team', icon: '👥' },
+    ],
+  },
 ];
 
 export default function Sidebar() {
   const activeView = useStore(s => s.activeView);
   const setActiveView = useStore(s => s.setActiveView);
+  const activeWeek = useStore(s => s.activeWeek);
+  const setActiveWeek = useStore(s => s.setActiveWeek);
+  const weeks = useStore(s => s.weeks);
+  const weekData = useStore(s => s.weekData);
+  const collapsedQuarters = useStore(s => s.collapsedQuarters);
+  const toggleQuarter = useStore(s => s.toggleQuarter);
+  const openWeekModal = useStore(s => s.openWeekModal);
+  const renameWeek = useStore(s => s.renameWeek);
+  const deleteWeek = useStore(s => s.deleteWeek);
+
+  const [menuWeekId, setMenuWeekId] = useState(null);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 });
+  const [renaming, setRenaming] = useState(false);
+  const [renameVal, setRenameVal] = useState('');
+  const dropdownRef = useRef(null);
+  const renameInputRef = useRef(null);
+
+  // Group weeks by quarter
+  const qMap = {};
+  weeks.forEach(w => {
+    const q = w.quarter || 'Q2 2026';
+    if (!qMap[q]) qMap[q] = [];
+    qMap[q].push(w);
+  });
+  const qOrder = ['Q2 2026', 'Q1 2026', 'Q3 2026', 'Q4 2026'].filter(q => qMap[q]);
+
+  const updatedCount = (wid) => weekData[wid]
+    ? Object.values(weekData[wid]).filter(d => d.updated_at).length
+    : 0;
+
+  const openMenu = (e, wid) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.left });
+    setMenuWeekId(wid);
+    setRenaming(false);
+    setRenameVal(weeks.find(w => w.id === wid)?.label || '');
+  };
+
+  const closeMenu = () => { setMenuWeekId(null); setRenaming(false); };
+
+  useEffect(() => {
+    if (!menuWeekId) return;
+    const handler = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) closeMenu(); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuWeekId]);
+
+  useEffect(() => { if (renaming && renameInputRef.current) renameInputRef.current.focus(); }, [renaming]);
+
+  const handleRename = () => {
+    if (!renameVal.trim()) return;
+    renameWeek(menuWeekId, renameVal.trim());
+    closeMenu();
+  };
+
+  const handleDelete = () => {
+    const w = weeks.find(x => x.id === menuWeekId);
+    if (!w) return;
+    if (!window.confirm(`Delete "${w.label}"? All updates and comments for this week will be permanently removed.`)) return;
+    deleteWeek(menuWeekId);
+    closeMenu();
+  };
 
   return (
     <nav className="sidebar">
-      <div className="sidebar-section">Views</div>
-      {VIEWS.map(v => (
+      <div className="sidebar-top">
+        {SECTIONS.map((sec, si) => (
+          <React.Fragment key={si}>
+            {si > 0 && <div className="sidebar-divider" />}
+            {sec.views.map(v => (
+              <div
+                key={v.id}
+                className={'sidebar-nav-item' + (activeView === v.id ? ' active' : '')}
+                onClick={() => setActiveView(v.id)}
+              >
+                <span className="sidebar-nav-icon">{v.icon}</span>
+                {v.label}
+              </div>
+            ))}
+          </React.Fragment>
+        ))}
+        <div className="sidebar-divider" />
+        {qOrder.map(q => {
+          const isOpen = !collapsedQuarters.has(q);
+          return (
+            <div key={q} className={'sidebar-section' + (isOpen ? ' open' : '')}>
+              <div className="sidebar-quarter" onClick={() => toggleQuarter(q)}>
+                <span className="sidebar-q-icon">▶</span>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, opacity: .6 }}>
+                  <rect x=".5" y=".5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.3" fill="none"/>
+                  <line x1=".5" y1="4" x2="11.5" y2="4" stroke="currentColor" strokeWidth="1.2"/>
+                  <line x1="3.5" y1=".5" x2="3.5" y2="4" stroke="currentColor" strokeWidth="1.2"/>
+                  <line x1="8.5" y1=".5" x2="8.5" y2="4" stroke="currentColor" strokeWidth="1.2"/>
+                </svg>
+                {q}
+              </div>
+              <div className="sidebar-weeks">
+                {qMap[q].map(w => (
+                  <div
+                    key={w.id}
+                    className={'sidebar-week' + (w.id === activeWeek ? ' active' : '')}
+                    onClick={() => setActiveWeek(w.id)}
+                  >
+                    <span className="sw-dot" />
+                    <span className="sw-label">{w.label}</span>
+                    <span className="sw-cnt">{updatedCount(w.id)}</span>
+                    <span
+                      className="sw-menu-btn"
+                      onClick={e => openMenu(e, w.id)}
+                      title="Rename or delete"
+                    >⋯</span>
+                  </div>
+                ))}
+                <div className="sidebar-add" onClick={() => openWeekModal(null, q)}>+ Add week</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div>
+        <div className="sidebar-divider" />
         <div
-          key={v.id}
-          className={'nav-item' + (activeView === v.id ? ' active' : '')}
-          onClick={() => setActiveView(v.id)}
+          className={'sidebar-nav-item' + (activeView === 'settings' ? ' active' : '')}
+          onClick={() => setActiveView('settings')}
         >
-          {v.icon}
-          {v.label}
+          <span className="sidebar-nav-icon">⚙️</span>
+          Settings
         </div>
-      ))}
+      </div>
+
+      {/* Week menu dropdown */}
+      {menuWeekId && (
+        <div
+          ref={dropdownRef}
+          className="sw-dropdown"
+          style={{ top: menuPos.top, left: menuPos.left }}
+        >
+          <div className={'sw-rename-row' + (renaming ? ' open' : '')}>
+            <input
+              ref={renameInputRef}
+              className="sw-rename-input"
+              value={renameVal}
+              onChange={e => setRenameVal(e.target.value)}
+              placeholder="Week label…"
+              onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') closeMenu(); }}
+            />
+            <button className="sw-rename-ok" onClick={handleRename}>✓</button>
+          </div>
+          {!renaming && (
+            <>
+              <div className="sw-dd-item" onClick={() => setRenaming(true)}>✏️ Rename week</div>
+              <div className="sw-dd-sep" />
+              <div className="sw-dd-item danger" onClick={handleDelete}>🗑 Delete week</div>
+            </>
+          )}
+        </div>
+      )}
     </nav>
   );
 }

@@ -1,69 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useStore from '../store/index';
 import { VMETA, VORDER } from '../data/constants';
+import MultiSelect from '../components/ui/MultiSelect';
 import { scoreColor } from '../utils/helpers';
 
+const SCORE_STEPS = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+
 function ScoreRow({ project, quarter }) {
-  const okrScores = useStore(s => s.okrScores);
+  const existing = useStore(s => s.okrScores[quarter]?.[project.id]);
   const saveScore = useStore(s => s.saveScore);
-  const userName = useStore(s => s.userName);
 
-  const existing = okrScores[quarter]?.[project.id];
-  const [score, setScore] = useState(existing?.score ?? null);
+  const [val, setVal] = useState(existing?.score ?? null);
   const [note, setNote] = useState(existing?.note || '');
-  const [editing, setEditing] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
-  const scoreVal = score !== null ? score : (existing?.score ?? 0);
-  const color = scoreColor(Math.round(scoreVal * 10) / 10);
+  useEffect(() => {
+    setVal(existing?.score ?? null);
+    setNote(existing?.note || '');
+    setDirty(false);
+  }, [quarter, project.id, existing?.score, existing?.note]);
 
-  const save = () => {
+  const scoreVal = val !== null ? val : 0;
+  const color = scoreColor(scoreVal);
+
+  const handleDot = (d) => {
+    setVal(d);
+    setDirty(true);
+  };
+
+  const handleSave = () => {
     saveScore(quarter, project.id, scoreVal, note);
-    setEditing(false);
+    setDirty(false);
   };
 
   return (
-    <div className="scoring-row">
-      <div>
-        <div style={{ fontWeight: 500, fontSize: 12 }}>{project.name}</div>
-        <div style={{ fontSize: 11, color: 'var(--text3)' }}>{project.owner}</div>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <input
-          type="range"
-          className="score-slider"
-          min={0} max={10} step={1}
-          value={Math.round(scoreVal * 10)}
-          onChange={e => { setScore(e.target.value / 10); setEditing(true); }}
-          style={{ background: `linear-gradient(to right, ${color} ${scoreVal * 100}%, var(--border2) ${scoreVal * 100}%)` }}
-        />
-      </div>
-
-      <div>
-        <span className="score-badge" style={{ background: color }}>
-          {existing?.score !== undefined ? existing.score.toFixed(1) : (score !== null ? scoreVal.toFixed(1) : '—')}
+    <tr>
+      <td>
+        <div style={{ fontWeight: 500, fontSize: 12.5 }}>{project.name}</div>
+        <div className="sc-obj-label">{project.owner}</div>
+      </td>
+      <td>
+        <div className="score-input-wrap">
+          <div className="score-dots">
+            {SCORE_STEPS.map(d => {
+              const filled = val !== null && d <= val;
+              return (
+                <div
+                  key={d}
+                  className={'score-dot' + (filled ? ' filled' : '')}
+                  style={filled ? { background: color, borderColor: color } : {}}
+                  title={d.toFixed(1)}
+                  onClick={() => handleDot(d)}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <div className="score-bar-wrap">
+          <div className="score-bar" style={{ width: `${scoreVal * 100}%`, background: color }} />
+        </div>
+      </td>
+      <td>
+        <span className="score-val" style={{ color }}>
+          {val !== null ? val.toFixed(1) : '—'}
         </span>
-      </div>
-
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        {editing ? (
-          <>
-            <input
-              type="text"
-              placeholder="Note…"
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              style={{ flex: 1, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 11, outline: 'none' }}
-            />
-            <button className="btn primary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={save}>Save</button>
-          </>
-        ) : (
-          <span style={{ fontSize: 11, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {existing?.note || '—'}
-          </span>
-        )}
-      </div>
-    </div>
+      </td>
+      <td>
+        <textarea
+          className="score-note"
+          rows={1}
+          value={note}
+          onChange={e => { setNote(e.target.value); setDirty(true); }}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSave(); } }}
+          placeholder="Note…"
+        />
+      </td>
+      <td style={{ textAlign: 'center' }}>
+        {dirty ? (
+          <button className="sc-save-btn" onClick={handleSave}>Save</button>
+        ) : existing?.score !== undefined ? (
+          <span style={{ fontSize: 10, color: 'var(--green)', fontFamily: 'var(--mono)' }}>✓</span>
+        ) : null}
+      </td>
+    </tr>
   );
 }
 
@@ -76,12 +95,13 @@ export default function ScoringPage() {
   const weeks = useStore(s => s.weeks);
   const okrScores = useStore(s => s.okrScores);
 
-  const quarters = [...new Set(weeks.map(w => w.quarter || 'Q2 2026'))];
+  const quarters = [...new Set(weeks.map(w => w.quarter || 'Q2 2026'))].sort().reverse();
+
+  const verticalFilter = Array.isArray(scoringFilters.vertical) ? scoringFilters.vertical : (scoringFilters.vertical === 'all' ? [] : [scoringFilters.vertical]);
 
   const filtered = projects.filter(p => {
-    if (scoringFilters.vertical !== 'all' && p.v !== (scoringFilters.vertical)) return false;
+    if (verticalFilter.length > 0 && !verticalFilter.includes(p.v)) return false;
     if (scoringFilters.search && !p.name.toLowerCase().includes(scoringFilters.search.toLowerCase())) return false;
-    if (scoringFilters.owner && !p.owner.toLowerCase().includes(scoringFilters.owner.toLowerCase())) return false;
     if (scoringFilters.band !== 'all') {
       const s = okrScores[scoringQuarter]?.[p.id]?.score;
       if (s === undefined) return scoringFilters.band === 'unscored';
@@ -97,60 +117,113 @@ export default function ScoringPage() {
   const avgScore = scoredCount
     ? filtered.reduce((a, p) => a + (okrScores[scoringQuarter]?.[p.id]?.score || 0), 0) / scoredCount
     : null;
+  const highCount = filtered.filter(p => {
+    const s = okrScores[scoringQuarter]?.[p.id]?.score;
+    return s !== undefined && s >= 0.7;
+  }).length;
 
   return (
-    <div className="page">
-      <div className="page-header">
+    <div className="scoring-page">
+      {/* Header */}
+      <div className="sc-header">
         <div>
-          <div className="page-title">OKR Scoring</div>
-          <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 2 }}>
-            {scoredCount}/{filtered.length} scored
-            {avgScore !== null && ` · Avg: ${avgScore.toFixed(2)}`}
+          <div className="sc-title">OKR Scoring</div>
+          <div style={{ fontSize: 12, color: 'var(--ink3)', marginTop: 3 }}>
+            Rate project outcomes 0.0 – 1.0 · {scoringQuarter}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <select className="filter-select" value={scoringQuarter} onChange={e => setScoringQuarter(e.target.value)}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select
+            className="sc-quarter-select"
+            value={scoringQuarter}
+            onChange={e => setScoringQuarter(e.target.value)}
+          >
             {quarters.map(q => <option key={q} value={q}>{q}</option>)}
           </select>
-          <select className="filter-select" value={scoringFilters.vertical} onChange={e => setScoringFilter('vertical', e.target.value)}>
-            <option value="all">All Verticals</option>
-            {VORDER.map(v => <option key={v} value={v}>{VMETA[v].label}</option>)}
-          </select>
-          <select className="filter-select" value={scoringFilters.band} onChange={e => setScoringFilter('band', e.target.value)}>
+          <MultiSelect
+            options={VORDER.map(v => ({ value: v, label: VMETA[v].label, color: VMETA[v].color }))}
+            selected={verticalFilter}
+            onChange={v => setScoringFilter('vertical', v)}
+            placeholder="All verticals"
+          />
+          <select
+            style={{ background: 'var(--white)', border: '1px solid var(--rule2)', borderRadius: 20, padding: '5px 12px', fontSize: 12, outline: 'none', cursor: 'pointer' }}
+            value={scoringFilters.band}
+            onChange={e => setScoringFilter('band', e.target.value)}
+          >
             <option value="all">All</option>
             <option value="unscored">Unscored</option>
             <option value="low">Low (&lt;0.4)</option>
             <option value="mid">Mid (0.4–0.7)</option>
             <option value="high">High (&gt;0.7)</option>
           </select>
+          <input
+            type="text"
+            placeholder="Search…"
+            value={scoringFilters.search || ''}
+            onChange={e => setScoringFilter('search', e.target.value)}
+            style={{ background: 'var(--white)', border: '1px solid var(--rule2)', borderRadius: 20, padding: '5px 12px', fontSize: 12, color: 'var(--ink)', outline: 'none', width: 140 }}
+          />
         </div>
       </div>
 
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px 160px', gap: 8, padding: '8px 14px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text4)' }}>
-          <div>Project</div>
-          <div>Score</div>
-          <div>Value</div>
-          <div>Note</div>
-        </div>
+      {/* Summary cards */}
+      <div className="sc-summary">
+        {[
+          { val: filtered.length,                    label: 'Total',      color: 'var(--ink)' },
+          { val: scoredCount,                         label: 'Scored',     color: 'var(--accent)' },
+          { val: filtered.length - scoredCount,       label: 'Unscored',   color: 'var(--ink3)' },
+          { val: avgScore !== null ? avgScore.toFixed(2) : '—', label: 'Avg Score', color: avgScore !== null ? scoreColor(avgScore) : 'var(--ink3)' },
+          { val: highCount,                           label: '≥ 0.7 High', color: 'var(--green)' },
+        ].map(({ val, label, color }) => (
+          <div key={label} className="sc-sum-card">
+            <div className="sc-sum-val" style={{ color }}>{val}</div>
+            <div className="sc-sum-label">{label}</div>
+          </div>
+        ))}
+      </div>
 
-        {VORDER.map(v => {
-          const vProjects = filtered.filter(p => p.v === v);
-          if (!vProjects.length) return null;
-          return (
-            <div key={v}>
-              <div style={{ padding: '6px 14px', background: 'var(--surface2)', borderBottom: '1px solid var(--border)', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: VMETA[v].color }} />
-                <span style={{ fontWeight: 700, fontSize: 12 }}>{VMETA[v].label}</span>
-                <span style={{ fontSize: 11, color: 'var(--text4)' }}>{vProjects.length}</span>
-              </div>
-              {vProjects.map(p => <ScoreRow key={p.id} project={p} quarter={scoringQuarter} />)}
+      {/* Scoring tables grouped by vertical */}
+      {VORDER.map(v => {
+        const vp = filtered.filter(p => p.v === v);
+        if (!vp.length) return null;
+        const vScored = vp.filter(p => okrScores[scoringQuarter]?.[p.id]?.score !== undefined).length;
+        const vAvg = vScored
+          ? (vp.reduce((a, p) => a + (okrScores[scoringQuarter]?.[p.id]?.score || 0), 0) / vScored)
+          : null;
+        return (
+          <div key={v} style={{ marginBottom: 28 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: VMETA[v].color }} />
+              <span style={{ fontFamily: 'var(--display)', fontWeight: 700, fontSize: 13.5, color: VMETA[v].color }}>{VMETA[v].label}</span>
+              <span style={{ fontSize: 11, color: 'var(--ink3)' }}>{vScored}/{vp.length} scored</span>
+              {vAvg !== null && (
+                <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: scoreColor(vAvg), fontWeight: 600 }}>avg {vAvg.toFixed(2)}</span>
+              )}
             </div>
-          );
-        })}
+            <table className="score-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '28%' }}>Project</th>
+                  <th style={{ width: '38%' }}>Score (0 – 1)</th>
+                  <th style={{ width: '7%' }}>Value</th>
+                  <th style={{ width: '20%' }}>Note</th>
+                  <th style={{ width: '7%' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {vp.map(p => <ScoreRow key={p.id} project={p} quarter={scoringQuarter} />)}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
 
-        {filtered.length === 0 && <div className="empty">No projects to score.</div>}
-      </div>
+      {filtered.length === 0 && (
+        <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink3)', fontSize: 13 }}>
+          No projects match the current filters.
+        </div>
+      )}
     </div>
   );
 }

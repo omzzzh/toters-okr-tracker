@@ -1,6 +1,13 @@
 import { create } from 'zustand';
-import { COL_DEFS, DEFAULT_COL_WIDTHS } from '../data/constants';
+import { COL_DEFS, DEFAULT_COL_WIDTHS, TEAM as SEED_TEAM } from '../data/constants';
 import { SEED_PROJECTS, SEED_WEEKS, SEED_WEEK_DATA } from '../data/seed';
+import { pushToScript, pullFromScript } from '../utils/sheetsSync';
+import { SCRIPT_URL as CONFIG_SCRIPT_URL } from '../config';
+import { runMigrations } from '../migrations';
+
+// Central config URL wins over per-user localStorage setting
+const getScriptUrl = (settingsScriptUrl) =>
+  CONFIG_SCRIPT_URL || settingsScriptUrl || '';
 
 // ── localStorage helpers ──────────────────────────
 const lsGet = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } };
@@ -28,14 +35,44 @@ const mergeColConfig = (saved) => {
 
 // ── Initial state loader ──────────────────────────
 const loadInitialState = () => {
-  const projects   = lsGet('tok_projects')    || JSON.parse(JSON.stringify(SEED_PROJECTS));
-  const weeks      = lsGet('tok_weeks')       || JSON.parse(JSON.stringify(SEED_WEEKS));
-  const weekData   = lsGet('tok_weekdata')    || {};
-  const changeLog  = lsGet('tok_changelog')   || [];
-  const okrScores  = lsGet('tok_okrscores')   || {};
-  const aiCache    = lsGet('tok_ai_cache')    || {};
-  const colCfg     = mergeColConfig(lsGet('tok_col_cfg'));
-  const settings   = lsGet('tok_settings')    || { sheetId: '', sheetTab: 'OKR_Data', apiKey: '', ejsPK: '', ejsSID: '', ejsTID: '' };
+  // Read raw stored values
+  const raw = {
+    projects:  lsGet('tok_projects'),
+    weeks:     lsGet('tok_weeks'),
+    weekData:  lsGet('tok_weekdata'),
+    changeLog: lsGet('tok_changelog'),
+    okrScores: lsGet('tok_okrscores'),
+    aiCache:   lsGet('tok_ai_cache'),
+    colCfg:    lsGet('tok_col_cfg'),
+    settings:  lsGet('tok_settings'),
+    team:      lsGet('tok_team'),
+  };
+
+  // Run any pending migrations before we use the data
+  const { state: migrated, migrated: didMigrate } = runMigrations(raw);
+  if (didMigrate) {
+    // Persist migrated values back to localStorage immediately
+    if (migrated.projects  != null) lsSet('tok_projects',  migrated.projects);
+    if (migrated.weeks     != null) lsSet('tok_weeks',     migrated.weeks);
+    if (migrated.weekData  != null) lsSet('tok_weekdata',  migrated.weekData);
+    if (migrated.changeLog != null) lsSet('tok_changelog', migrated.changeLog);
+    if (migrated.okrScores != null) lsSet('tok_okrscores', migrated.okrScores);
+    if (migrated.aiCache   != null) lsSet('tok_ai_cache',  migrated.aiCache);
+    if (migrated.colCfg    != null) lsSet('tok_col_cfg',   migrated.colCfg);
+    if (migrated.settings  != null) lsSet('tok_settings',  migrated.settings);
+    if (migrated.team      != null) lsSet('tok_team',      migrated.team);
+  }
+
+  // Apply defaults for any keys that were never stored (fresh install)
+  const projects   = migrated.projects  || JSON.parse(JSON.stringify(SEED_PROJECTS));
+  const weeks      = migrated.weeks     || JSON.parse(JSON.stringify(SEED_WEEKS));
+  const weekData   = migrated.weekData  || {};
+  const changeLog  = migrated.changeLog || [];
+  const okrScores  = migrated.okrScores || {};
+  const aiCache    = migrated.aiCache   || {};
+  const colCfg     = mergeColConfig(migrated.colCfg);
+  const settings   = migrated.settings  || { scriptUrl: '', ejsPK: '', ejsSID: '', ejsTID: '' };
+  const team       = migrated.team      || JSON.parse(JSON.stringify(SEED_TEAM));
 
   // Seed w1 data if not present
   if (!weekData['w1']) {
@@ -45,8 +82,38 @@ const loadInitialState = () => {
     });
   }
 
-  return { projects, weeks, weekData, changeLog, okrScores, aiCache, colCfg, settings };
+  return { projects, weeks, weekData, changeLog, okrScores, aiCache, colCfg, settings, team };
 };
+
+// ── Debounced push to Sheets ──────────────────────
+let _pushTimer = null;
+function schedulePush(state) {
+  clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(async () => {
+    const s = useStore.getState();
+    const url = getScriptUrl(s.settings?.scriptUrl);
+    if (!url) return;
+    useStore.setState({ syncStatus: 'syncing' });
+    try {
+      await pushToScript(url, s);
+      useStore.setState({ syncStatus: 'synced', lastSynced: Date.now(), syncError: null });
+    } catch (e) {
+      useStore.setState({ syncStatus: 'error', syncError: e.message });
+    }
+  }, 2000);
+}
+
+function localSave(s) {
+  lsSet('tok_projects',  s.projects);
+  lsSet('tok_weeks',     s.weeks);
+  lsSet('tok_weekdata',  s.weekData);
+  lsSet('tok_changelog', s.changeLog);
+  lsSet('tok_okrscores', s.okrScores);
+  lsSet('tok_ai_cache',  s.aiCache);
+  lsSet('tok_col_cfg',   s.colCfg);
+  lsSet('tok_settings',  s.settings);
+  lsSet('tok_team',      s.team);
+}
 
 // ── The store ─────────────────────────────────────
 const useStore = create((set, get) => {
@@ -55,17 +122,8 @@ const useStore = create((set, get) => {
   const persist = (patch) => {
     set(patch);
     const s = get();
-    lsSet('tok_projects',  s.projects);
-    lsSet('tok_weeks',     s.weeks);
-    lsSet('tok_weekdata',  s.weekData);
-    lsSet('tok_changelog', s.changeLog);
-    lsSet('tok_okrscores', s.okrScores);
-    lsSet('tok_ai_cache',  s.aiCache);
-    lsSet('tok_col_cfg',   s.colCfg);
-    lsSet('tok_settings',  s.settings);
-    // Trigger sheets sync if configured
-    const { settings: cfg } = s;
-    if (cfg.sheetId && cfg.apiKey) syncSheets(s);
+    localSave(s);
+    if (getScriptUrl(s.settings?.scriptUrl)) schedulePush(s);
   };
 
   return {
@@ -75,6 +133,9 @@ const useStore = create((set, get) => {
     activeView: 'okr',
     userName: '',
     collapsedQuarters: new Set(),
+    syncStatus: 'idle',   // 'idle' | 'syncing' | 'synced' | 'error'
+    syncError: null,
+    lastSynced: null,
 
     // Modals
     weekModalOpen: false,
@@ -84,7 +145,7 @@ const useStore = create((set, get) => {
     weekDropdownOpen: false,
 
     // Filters
-    filters: { status: '', owner: '', vertical: 'all', search: '', sort: 'default' },
+    filters: { status: [], owner: [], vertical: [], search: '', sort: 'default' },
     analyticsFilters: { vertical: 'all', status: '', phase: '', owner: '', search: '', sort: 'name' },
     scoringFilters: { vertical: 'all', owner: '', search: '', band: 'all', sort: 'name' },
     scoringQuarter: initial.weeks[0]?.quarter || 'Q2 2026',
@@ -111,7 +172,7 @@ const useStore = create((set, get) => {
 
     // ── Filters ──
     setFilter: (key, val) => set(s => ({ filters: { ...s.filters, [key]: val } })),
-    clearFilters: () => set({ filters: { status: '', owner: '', vertical: 'all', search: '', sort: 'default' } }),
+    clearFilters: () => set({ filters: { status: [], owner: [], vertical: [], search: '', sort: 'default' } }),
     setAnalyticsFilter: (key, val) => set(s => ({ analyticsFilters: { ...s.analyticsFilters, [key]: val } })),
     setScoringFilter: (key, val) => set(s => ({ scoringFilters: { ...s.scoringFilters, [key]: val } })),
     setScoringQuarter: (q) => set({ scoringQuarter: q }),
@@ -152,6 +213,20 @@ const useStore = create((set, get) => {
       const prev = s.getWD(s.activeWeek, projectId);
       persist({
         weekData: { ...s.weekData, [s.activeWeek]: { ...s.weekData[s.activeWeek], [projectId]: { ...prev, engNotes: notes } } },
+      });
+    },
+
+    // ── Save a single week-data field directly (used by grid) ──
+    saveWeekFieldDirect: (weekId, projectId, field, value) => {
+      const s = get();
+      const prev = s.weekData[weekId]?.[projectId] || { status: 'Not started', progress: '', plan: '', engNotes: '', updated_at: null, comments: [] };
+      let log = [...s.changeLog];
+      if (field === 'status' && prev.status !== value) {
+        log = [...log, { pid: projectId, ts: Date.now(), weekId, field: 'status', from: prev.status || '', to: value, by: s.userName || 'unknown' }];
+      }
+      persist({
+        weekData: { ...s.weekData, [weekId]: { ...(s.weekData[weekId] || {}), [projectId]: { ...prev, [field]: value } } },
+        changeLog: log,
       });
     },
 
@@ -254,10 +329,50 @@ const useStore = create((set, get) => {
     saveColConfig: (newConfig) => persist({ colCfg: newConfig }),
     resetColConfig: () => persist({ colCfg: DEFAULT_COL_CONFIG() }),
 
+    // ── Team management ──
+    addMember: (member) => {
+      const s = get();
+      persist({ team: [...s.team, { ...member, id: 't' + Date.now() }] });
+    },
+    updateMember: (id, patch) => {
+      const s = get();
+      persist({ team: s.team.map(m => m.id === id ? { ...m, ...patch } : m) });
+    },
+    deleteMember: (id) => {
+      const s = get();
+      persist({ team: s.team.filter(m => m.id !== id) });
+    },
+
     // ── Settings ──
     saveSettings: (patch) => {
       const s = get();
       persist({ settings: { ...s.settings, ...patch } });
+    },
+
+    // ── Sheets: pull latest data from Apps Script on startup ──
+    loadFromSheets: async () => {
+      const s = get();
+      const url = getScriptUrl(s.settings?.scriptUrl);
+      if (!url) return;
+      set({ syncStatus: 'syncing', syncError: null });
+      try {
+        const pulled = await pullFromScript(url);
+        // Only replace state if Sheets has real data (not empty)
+        if (pulled && (pulled.projects?.length > 0 || pulled.weeks?.length > 0)) {
+          set({ ...pulled, syncStatus: 'synced', lastSynced: Date.now() });
+          // Also update localStorage cache
+          const now = get();
+          localSave(now);
+        } else {
+            // Sheets is empty — push current local state up to initialise it
+          set({ syncStatus: 'syncing' });
+          await pushToScript(url, get());
+          set({ syncStatus: 'synced', lastSynced: Date.now() });
+        }
+      } catch (e) {
+        console.warn('Sheets pull failed:', e);
+        set({ syncStatus: 'error', syncError: e.message });
+      }
     },
 
     // ── Derived: getTableCols, getGridCols, getFilterCols ──
@@ -301,45 +416,5 @@ const useStore = create((set, get) => {
     },
   };
 });
-
-// ── Google Sheets sync (fire-and-forget) ─────────
-async function syncSheets(state) {
-  const { settings, projects, weeks, weekData, changeLog, okrScores } = state;
-  const { sheetId, sheetTab, apiKey } = settings;
-  if (!sheetId || !apiKey) return;
-  const base = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}`;
-  const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` };
-
-  try {
-    // Tab 1: OKR weekly data
-    const rows = [['weekId','weekLabel','projectId','vertical','objective','name','owner','prdDate','due','phase','status','progress','plan','engNotes','updated_at','comments_count']];
-    weeks.forEach(w => {
-      projects.forEach(p => {
-        const d = weekData[w.id]?.[p.id]; if (!d) return;
-        rows.push([w.id, w.label, p.id, p.v, p.obj, p.name, p.owner, p.prdDate||'', p.due, p.phase||'', d.status||'', d.progress||'', d.plan||'', d.engNotes||'', d.updated_at||'', d.comments?.length||0]);
-      });
-    });
-    await fetch(`${base}/values/${sheetTab}!A1?valueInputOption=USER_ENTERED`, { method: 'PUT', headers, body: JSON.stringify({ values: rows }) });
-
-    // Tab 2: Change log
-    const logRows = [['timestamp','date','projectId','projectName','vertical','weekId','weekLabel','field','from','to','changedBy']];
-    changeLog.forEach(e => {
-      const p = projects.find(x => x.id === e.pid);
-      const w = weeks.find(x => x.id === e.weekId);
-      logRows.push([e.ts, new Date(e.ts).toISOString().slice(0,16).replace('T',' '), e.pid, p?.name||'', p?.v||'', e.weekId||'', w?.label||'', e.field, e.from||'', e.to||'', e.by||'']);
-    });
-    await fetch(`${base}/values/Change_Log!A1?valueInputOption=USER_ENTERED`, { method: 'PUT', headers, body: JSON.stringify({ values: logRows }) });
-
-    // Tab 3: OKR Scores
-    const scoreRows = [['quarter','projectId','projectName','vertical','objective','score','note','scoredBy','scoredAt']];
-    Object.entries(okrScores).forEach(([quarter, scores]) => {
-      Object.entries(scores).forEach(([pid, s]) => {
-        const p = projects.find(x => x.id === pid);
-        scoreRows.push([quarter, pid, p?.name||'', p?.v||'', p?.obj||'', s.score??'', s.note||'', s.scoredBy||'', s.scoredAt ? new Date(s.scoredAt).toISOString().slice(0,10) : '']);
-      });
-    });
-    await fetch(`${base}/values/OKR_Scores!A1?valueInputOption=USER_ENTERED`, { method: 'PUT', headers, body: JSON.stringify({ values: scoreRows }) });
-  } catch (e) { console.warn('Sheets sync failed:', e); }
-}
 
 export default useStore;
