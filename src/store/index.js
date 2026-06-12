@@ -122,10 +122,16 @@ function applyNameMigration(state) {
 }
 
 function applyTeamAdditions(state) {
+  // Ensure every member from the canonical list exists in the stored team.
+  // Members added manually via the UI are preserved; only missing ones are injected.
+  const canonical = [
+    ...SEED_TEAM,
+    ...NEW_MEMBERS,
+  ];
   const existingNames = new Set((state.team || []).map(m => m.name));
-  const toAdd = NEW_MEMBERS.filter(m => !existingNames.has(m.name));
+  const toAdd = canonical.filter(m => !existingNames.has(m.name));
   if (toAdd.length === 0) return state;
-  return { ...state, team: [...(state.team || []), ...toAdd.map(m => ({ ...m, id: 't' + m.name.replace(/\s+/g, '') }))] };
+  return { ...state, team: [...(state.team || []), ...toAdd.map(m => ({ ...m, id: m.id || ('t' + m.name.replace(/\s+/g, '')) }))] };
 }
 
 // ── Debounced push to Firestore ───────────────────
