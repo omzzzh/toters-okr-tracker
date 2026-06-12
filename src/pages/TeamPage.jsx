@@ -47,8 +47,6 @@ function MemberRow({ member, onEdit }) {
         <div className="tm-av-sm" style={{ background: member.color }}>{initials(member.name)}</div>
       </td>
       <td className="tm-td tm-td-name">{member.name}</td>
-      <td className="tm-td"><LevelBadge value={member.level} /></td>
-      <td className="tm-td tm-td-role">{member.role || <span style={{ color: 'var(--ink4)' }}>—</span>}</td>
       <td className="tm-td"><JFBadge value={member.jobFamily} /></td>
       <td className="tm-td tm-td-email">{member.email}</td>
       <td className="tm-td tm-td-actions">
@@ -177,7 +175,7 @@ export default function TeamPage() {
   })).filter(g => g.members.length > 0);
   const ungrouped = filtered.filter(m => !m.jobFamily);
 
-  const COL_SPAN = 7;
+  const COL_SPAN = 5;
 
   const renderRows = (members) => members.map(m =>
     editingId === m.id ? (
@@ -236,8 +234,6 @@ export default function TeamPage() {
             <tr>
               <th className="tm-th tm-th-av" />
               <th className="tm-th">Name</th>
-              <th className="tm-th" style={{ width: 64 }}>Level</th>
-              <th className="tm-th">Role</th>
               <th className="tm-th" style={{ width: 110 }}>Family</th>
               <th className="tm-th">Email</th>
               <th className="tm-th tm-th-actions" />
