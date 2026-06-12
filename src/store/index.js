@@ -80,14 +80,8 @@ const loadInitialState = () => {
   return { projects, weeks, weekData, changeLog, okrScores, aiCache, colCfg, settings, team };
 };
 
-// ── One-time name migration ───────────────────────
-const NEW_MEMBERS = [
-  { name: 'Toufic Khoury',  email: 'toufic.khoury@totersapp.com',  color: '#6366f1' },
-  { name: 'Ibrahim Chawa',  email: 'ibrahim.chawa@totersapp.com',  color: '#ec4899' },
-  { name: 'Soraya Haroun',  email: 'soraya.haroun@totersapp.com',  color: '#f97316' },
-  { name: 'Rabeeh Adwan',   email: 'rabeeh.adwan@totersapp.com',   color: '#14b8a6' },
-];
-
+// ── Team sync migrations ──────────────────────────
+// All old names that may exist in Firestore → their correct current name.
 const NAME_MAP = {
   'Marwa Stephan':   'Marwa Stouhi',
   'Ahmad Lahham':    'Ahmad Louay Soussi',
@@ -96,12 +90,16 @@ const NAME_MAP = {
   'Adnan Diab':      'Adnan Dimashki',
   'Ahmad Hamdan':    'Ahmad Haidar',
   'Omar Barakat':    'Omar Hmayssi',
+  'Therese Kairouz': 'Therese Kayrouz',
+  'Ali Ezzedine':    'Ali Ezzeddine',
+  'Elie Nouneh':     'Elie Noune',
 };
 const rn = (n) => NAME_MAP[n] || n;
 
-// Both functions run on every Firestore pull and are fully idempotent —
-// they only mutate state when something actually needs fixing, so they
-// never cause unnecessary Firestore writes.
+// Names that existed before but are no longer on the team.
+const REMOVED_NAMES = new Set(['Jana Kabrit', 'Omar Hmayssi', 'Omar Barakat']);
+
+// Both functions run on every Firestore pull and are fully idempotent.
 
 function applyNameMigration(state) {
   const team      = (state.team || []).map(m => ({ ...m, name: rn(m.name) }));
@@ -121,17 +119,24 @@ function applyNameMigration(state) {
   return { ...state, team, projects, changeLog, weekData };
 }
 
-function applyTeamAdditions(state) {
-  // Ensure every member from the canonical list exists in the stored team.
-  // Members added manually via the UI are preserved; only missing ones are injected.
-  const canonical = [
-    ...SEED_TEAM,
-    ...NEW_MEMBERS,
-  ];
-  const existingNames = new Set((state.team || []).map(m => m.name));
-  const toAdd = canonical.filter(m => !existingNames.has(m.name));
-  if (toAdd.length === 0) return state;
-  return { ...state, team: [...(state.team || []), ...toAdd.map(m => ({ ...m, id: m.id || ('t' + m.name.replace(/\s+/g, '')) }))] };
+function applyTeamSync(state) {
+  // Rebuild team from canonical SEED_TEAM (preserving existing IDs).
+  // Members manually added outside the canonical list are preserved.
+  // Members in REMOVED_NAMES are dropped.
+  const canonicalNames = new Set(SEED_TEAM.map(m => m.name));
+  const existingById = {};
+  (state.team || []).forEach(m => { existingById[m.name] = m; });
+
+  const newTeam = SEED_TEAM.map(m => ({
+    ...m,
+    id: existingById[m.name]?.id || ('t' + m.name.replace(/\s+/g, '')),
+  }));
+
+  const extras = (state.team || []).filter(
+    m => !canonicalNames.has(m.name) && !REMOVED_NAMES.has(m.name)
+  );
+
+  return { ...state, team: [...newTeam, ...extras] };
 }
 
 // ── Debounced push to Firestore ───────────────────
@@ -405,7 +410,7 @@ const useStore = create((set, get) => {
         const pulled = await pullFromFirestore();
         if (pulled && (pulled.projects?.length > 0 || pulled.weeks?.length > 0)) {
           const afterNames = applyNameMigration(pulled);
-          const patched = applyTeamAdditions(afterNames);
+          const patched = applyTeamSync(afterNames);
           const changed = JSON.stringify(patched.team) !== JSON.stringify(pulled.team) ||
                           JSON.stringify(patched.projects) !== JSON.stringify(pulled.projects);
           set({ ...patched, syncStatus: 'synced', lastSynced: Date.now() });
