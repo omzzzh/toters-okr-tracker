@@ -3,6 +3,7 @@ import useStore from '../store/index';
 import { VMETA, VORDER, STATUS_META, PHASES, TEAM, STATUSES } from '../data/constants';
 import MultiSelect from '../components/ui/MultiSelect';
 import { OwnerChips } from '../components/ui/OwnerChip';
+import OwnerPicker from '../components/ui/OwnerPicker';
 import MentionPopup from '../components/ui/MentionPopup';
 import { tago, initials } from '../utils/helpers';
 import { emailProjectOwners, emailMentioned } from '../utils/email';
@@ -130,8 +131,6 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
   const [status, setStatus] = useState(d.status || 'Not started');
   const [savedAt, setSavedAt] = useState(d.updated_at || null);
   const [showComments, setShowComments] = useState(false);
-  const [editingOwner, setEditingOwner] = useState(false);
-  const ownerInputRef = useRef(null);
   const showToast = useToastCtx();
   const { popup: mentionPopup, onInput: onMentionInput, onKeyDown: onMentionKeyDown, insertMention, close: closeMention } = useMention(team);
 
@@ -187,21 +186,13 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
         );
       case 'owner':
         return (
-          <td key="owner" className="td-owner" onClick={() => { if (!editingOwner) setEditingOwner(true); }}>
-            {editingOwner ? (
-              <textarea
-                className="editable-ta"
-                ref={el => { ownerInputRef.current = el; if (el) { el.focus(); el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
-                defaultValue={project.owner}
-                onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
-                onBlur={e => { saveProjectField(project.id, 'owner', e.target.value); setEditingOwner(false); }}
-                onKeyDown={e => { if (e.key === 'Escape') { setEditingOwner(false); } }}
-              />
-            ) : project.owner ? (
-              <OwnerChips ownerStr={project.owner} size="sm" />
-            ) : (
-              <span style={{ color: 'var(--ink4)', fontSize: 11 }}>—</span>
-            )}
+          <td key="owner" className="td-owner">
+            <OwnerPicker
+              value={project.owner}
+              onChange={v => saveProjectField(project.id, 'owner', v)}
+              team={team}
+              compact
+            />
           </td>
         );
       case 'progress':
