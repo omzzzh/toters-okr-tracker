@@ -1,13 +1,8 @@
 import { create } from 'zustand';
 import { COL_DEFS, DEFAULT_COL_WIDTHS, TEAM as SEED_TEAM } from '../data/constants';
 import { SEED_PROJECTS, SEED_WEEKS, SEED_WEEK_DATA } from '../data/seed';
-import { pushToScript, pullFromScript } from '../utils/sheetsSync';
-import { SCRIPT_URL as CONFIG_SCRIPT_URL } from '../config';
+import { pushToFirestore, pullFromFirestore, listenToFirestore } from '../firestoreSync';
 import { runMigrations } from '../migrations';
-
-// Central config URL wins over per-user localStorage setting
-const getScriptUrl = (settingsScriptUrl) =>
-  CONFIG_SCRIPT_URL || settingsScriptUrl || '';
 
 // ── localStorage helpers ──────────────────────────
 const lsGet = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } };
@@ -85,17 +80,17 @@ const loadInitialState = () => {
   return { projects, weeks, weekData, changeLog, okrScores, aiCache, colCfg, settings, team };
 };
 
-// ── Debounced push to Sheets ──────────────────────
+// ── Debounced push to Firestore ───────────────────
 let _pushTimer = null;
-function schedulePush(state) {
+let _unsubscribeFirestore = null;
+
+function schedulePush() {
   clearTimeout(_pushTimer);
   _pushTimer = setTimeout(async () => {
     const s = useStore.getState();
-    const url = getScriptUrl(s.settings?.scriptUrl);
-    if (!url) return;
     useStore.setState({ syncStatus: 'syncing' });
     try {
-      await pushToScript(url, s);
+      await pushToFirestore(s);
       useStore.setState({ syncStatus: 'synced', lastSynced: Date.now(), syncError: null });
     } catch (e) {
       useStore.setState({ syncStatus: 'error', syncError: e.message });
@@ -123,7 +118,7 @@ const useStore = create((set, get) => {
     set(patch);
     const s = get();
     localSave(s);
-    if (getScriptUrl(s.settings?.scriptUrl)) schedulePush(s);
+    schedulePush();
   };
 
   return {
@@ -349,28 +344,27 @@ const useStore = create((set, get) => {
       persist({ settings: { ...s.settings, ...patch } });
     },
 
-    // ── Sheets: pull latest data from Apps Script on startup ──
+    // ── Firestore: pull on startup + subscribe to real-time updates ──
     loadFromSheets: async () => {
-      const s = get();
-      const url = getScriptUrl(s.settings?.scriptUrl);
-      if (!url) return;
       set({ syncStatus: 'syncing', syncError: null });
       try {
-        const pulled = await pullFromScript(url);
-        // Only replace state if Sheets has real data (not empty)
+        const pulled = await pullFromFirestore();
         if (pulled && (pulled.projects?.length > 0 || pulled.weeks?.length > 0)) {
           set({ ...pulled, syncStatus: 'synced', lastSynced: Date.now() });
-          // Also update localStorage cache
-          const now = get();
-          localSave(now);
+          localSave(get());
         } else {
-            // Sheets is empty — push current local state up to initialise it
-          set({ syncStatus: 'syncing' });
-          await pushToScript(url, get());
+          // Firestore is empty — push local state up to initialise it
+          await pushToFirestore(get());
           set({ syncStatus: 'synced', lastSynced: Date.now() });
         }
+        // Set up real-time listener for changes from other users
+        if (_unsubscribeFirestore) _unsubscribeFirestore();
+        _unsubscribeFirestore = listenToFirestore((newState) => {
+          set({ ...newState, lastSynced: Date.now() });
+          localSave(get());
+        });
       } catch (e) {
-        console.warn('Sheets pull failed:', e);
+        console.warn('Firestore sync failed:', e);
         set({ syncStatus: 'error', syncError: e.message });
       }
     },
