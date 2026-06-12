@@ -76,6 +76,10 @@ export const TEAM = [
   { name: 'Elie Nouneh',        email: 'elie.nouneh@totersapp.com',     color: '#f59e0b' },
   { name: 'Nancy Haddad',       email: 'nancy.haddad@totersapp.com',    color: '#10b981' },
   { name: 'Omar Hmayssi',       email: 'omar.hmayssi@totersapp.com',    color: '#e8500a' },
+  { name: 'Toufic Khoury',     email: 'toufic.khoury@totersapp.com',   color: '#6366f1' },
+  { name: 'Ibrahim Chawa',     email: 'ibrahim.chawa@totersapp.com',   color: '#ec4899' },
+  { name: 'Soraya Haroun',     email: 'soraya.haroun@totersapp.com',   color: '#f97316' },
+  { name: 'Rabeeh Adwan',      email: 'rabeeh.adwan@totersapp.com',    color: '#14b8a6' },
 ];
 
 export const COL_DEFS = [

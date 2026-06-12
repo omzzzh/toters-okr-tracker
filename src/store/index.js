@@ -81,6 +81,13 @@ const loadInitialState = () => {
 };
 
 // ── One-time name migration ───────────────────────
+const NEW_MEMBERS = [
+  { name: 'Toufic Khoury',  email: 'toufic.khoury@totersapp.com',  color: '#6366f1' },
+  { name: 'Ibrahim Chawa',  email: 'ibrahim.chawa@totersapp.com',  color: '#ec4899' },
+  { name: 'Soraya Haroun',  email: 'soraya.haroun@totersapp.com',  color: '#f97316' },
+  { name: 'Rabeeh Adwan',   email: 'rabeeh.adwan@totersapp.com',   color: '#14b8a6' },
+];
+
 const NAME_MAP = {
   'Marwa Stephan':   'Marwa Stouhi',
   'Ahmad Lahham':    'Ahmad Louay Soussi',
@@ -109,7 +116,17 @@ function applyNameMigration(state) {
     ])
   );
   lsSet('tok_names_migrated_v1', true);
-  return { ...state, team, projects, changeLog, weekData };
+  const withNew = applyTeamAdditions({ ...state, team, projects, changeLog, weekData });
+  return withNew;
+}
+
+function applyTeamAdditions(state) {
+  if (lsGet('tok_team_added_v1')) return state;
+  const existingNames = new Set((state.team || []).map(m => m.name));
+  const toAdd = NEW_MEMBERS.filter(m => !existingNames.has(m.name));
+  if (toAdd.length === 0) { lsSet('tok_team_added_v1', true); return state; }
+  lsSet('tok_team_added_v1', true);
+  return { ...state, team: [...(state.team || []), ...toAdd.map(m => ({ ...m, id: 't' + m.name.replace(/\s+/g, '') }))] };
 }
 
 // ── Debounced push to Firestore ───────────────────
@@ -382,7 +399,8 @@ const useStore = create((set, get) => {
       try {
         const pulled = await pullFromFirestore();
         if (pulled && (pulled.projects?.length > 0 || pulled.weeks?.length > 0)) {
-          const patched = applyNameMigration(pulled);
+          const afterNames = applyNameMigration(pulled);
+          const patched = applyTeamAdditions(afterNames);
           set({ ...patched, syncStatus: 'synced', lastSynced: Date.now() });
           localSave(get());
           if (patched !== pulled) await pushToFirestore(get());
