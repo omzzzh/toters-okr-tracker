@@ -99,8 +99,11 @@ const NAME_MAP = {
 };
 const rn = (n) => NAME_MAP[n] || n;
 
+// Both functions run on every Firestore pull and are fully idempotent —
+// they only mutate state when something actually needs fixing, so they
+// never cause unnecessary Firestore writes.
+
 function applyNameMigration(state) {
-  if (lsGet('tok_names_migrated_v1')) return state;
   const team      = (state.team || []).map(m => ({ ...m, name: rn(m.name) }));
   const projects  = (state.projects || []).map(p => ({ ...p, owner: rn(p.owner) }));
   const changeLog = (state.changeLog || []).map(e => ({ ...e, by: rn(e.by) }));
@@ -115,17 +118,13 @@ function applyNameMigration(state) {
       ),
     ])
   );
-  lsSet('tok_names_migrated_v1', true);
-  const withNew = applyTeamAdditions({ ...state, team, projects, changeLog, weekData });
-  return withNew;
+  return { ...state, team, projects, changeLog, weekData };
 }
 
 function applyTeamAdditions(state) {
-  if (lsGet('tok_team_added_v1')) return state;
   const existingNames = new Set((state.team || []).map(m => m.name));
   const toAdd = NEW_MEMBERS.filter(m => !existingNames.has(m.name));
-  if (toAdd.length === 0) { lsSet('tok_team_added_v1', true); return state; }
-  lsSet('tok_team_added_v1', true);
+  if (toAdd.length === 0) return state;
   return { ...state, team: [...(state.team || []), ...toAdd.map(m => ({ ...m, id: 't' + m.name.replace(/\s+/g, '') }))] };
 }
 
@@ -401,9 +400,11 @@ const useStore = create((set, get) => {
         if (pulled && (pulled.projects?.length > 0 || pulled.weeks?.length > 0)) {
           const afterNames = applyNameMigration(pulled);
           const patched = applyTeamAdditions(afterNames);
+          const changed = JSON.stringify(patched.team) !== JSON.stringify(pulled.team) ||
+                          JSON.stringify(patched.projects) !== JSON.stringify(pulled.projects);
           set({ ...patched, syncStatus: 'synced', lastSynced: Date.now() });
           localSave(get());
-          if (patched !== pulled) await pushToFirestore(get());
+          if (changed) await pushToFirestore(get());
         } else {
           // Firestore is empty — push local state up to initialise it
           await pushToFirestore(get());
