@@ -111,42 +111,52 @@ function Comments({ project, weekId, weekData }) {
   );
 }
 
-function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectField, saveUpdate, saveEngNotes, saveWeekFieldDirect, team }) {
+function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectField, saveWeekFieldDirect, team }) {
   const d = weekData[weekId]?.[project.id] || {};
   const [progress, setProgress] = useState(d.progress || '');
   const [plan, setPlan] = useState(d.plan || '');
   const [engNotes, setEngNotes] = useState(d.engNotes || '');
   const [status, setStatus] = useState(d.status || 'Not started');
-  const [savedAt, setSavedAt] = useState(d.updated_at || null);
   const [showComments, setShowComments] = useState(false);
-  const showToast = useToastCtx();
+  const [justSaved, setJustSaved] = useState(false);
   const { popup: mentionPopup, onInput: onMentionInput, onKeyDown: onMentionKeyDown, insertMention, close: closeMention } = useMention(team);
 
   const progressRef = useRef(null);
   const planRef = useRef(null);
   const engRef = useRef(null);
+  const savedTimerRef = useRef(null);
 
   useEffect(() => {
     setProgress(d.progress || '');
     setPlan(d.plan || '');
     setEngNotes(d.engNotes || '');
     setStatus(d.status || 'Not started');
-    setSavedAt(d.updated_at || null);
   }, [weekId, project.id]);
 
   useEffect(() => { autogrow(progressRef.current); }, [progress]);
   useEffect(() => { autogrow(planRef.current); }, [plan]);
   useEffect(() => { autogrow(engRef.current); }, [engNotes]);
 
+  const flashSaved = () => {
+    setJustSaved(true);
+    clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setJustSaved(false), 1800);
+  };
+
+  const handleStatusChange = (newStatus) => {
+    setStatus(newStatus);
+    saveWeekFieldDirect(weekId, project.id, 'status', newStatus);
+    flashSaved();
+  };
+
+  const handleTextBlur = (field, value) => {
+    saveWeekFieldDirect(weekId, project.id, field, value);
+    flashSaved();
+  };
+
   const isStale = !d.updated_at;
   const meta = STATUS_META[status] || STATUS_META['Not started'];
-  const rowCls = `${meta.row}${isStale ? ' row-stale' : ''}`;
-
-  const handleSave = () => {
-    saveUpdate(project.id, { progress, plan, status, engNotes });
-    setSavedAt(Date.now());
-    showToast('✓ Update saved');
-  };
+  const rowCls = `proj-row ${meta.row}${isStale ? ' row-stale' : ''}`;
 
   const renderCell = (c) => {
     switch (c.key) {
@@ -160,16 +170,15 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
               onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
               onBlur={e => saveProjectField(project.id, 'name', e.target.value)}
             />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+            <div className="row-actions">
+              {isStale && <span className="stale-dot" title="Not updated this week" />}
               <button
-                className="btn btn-ghost btn-sm"
-                style={{ fontSize: 10.5, padding: '2px 8px', color: showComments ? 'var(--accent)' : 'var(--ink3)', borderColor: showComments ? 'var(--accent)' : 'var(--rule2)' }}
+                className={`comment-btn${showComments ? ' active' : ''}${d.comments?.length > 0 ? ' has-comments' : ''}`}
                 onClick={() => setShowComments(v => !v)}
               >
-                💬 {d.comments?.length > 0 ? `${d.comments.length} comment${d.comments.length > 1 ? 's' : ''}` : 'Add comment'}
+                {d.comments?.length > 0 ? `💬 ${d.comments.length}` : '💬'}
               </button>
             </div>
-            {isStale && <div className="stale-badge">⏳ not updated yet</div>}
           </td>
         );
       case 'owner':
@@ -193,6 +202,7 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
               onChange={e => setProgress(e.target.value)}
               onInput={e => { autogrow(e.target); onMentionInput(e); }}
               onKeyDown={onMentionKeyDown}
+              onBlur={e => handleTextBlur('progress', e.target.value)}
             />
             <MentionPopup popup={mentionPopup} onSelect={insertMention} onClose={closeMention} />
           </td>
@@ -207,6 +217,7 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
               onChange={e => setPlan(e.target.value)}
               onInput={e => { autogrow(e.target); onMentionInput(e); }}
               onKeyDown={onMentionKeyDown}
+              onBlur={e => handleTextBlur('plan', e.target.value)}
             />
             <MentionPopup popup={mentionPopup} onSelect={insertMention} onClose={closeMention} />
           </td>
@@ -221,14 +232,14 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
               onChange={e => setEngNotes(e.target.value)}
               onInput={e => { autogrow(e.target); onMentionInput(e); }}
               onKeyDown={onMentionKeyDown}
-              onBlur={e => saveEngNotes(project.id, e.target.value)}
+              onBlur={e => handleTextBlur('engNotes', e.target.value)}
             />
             <MentionPopup popup={mentionPopup} onSelect={insertMention} onClose={closeMention} />
           </td>
         );
       case 'prdDate':
         return (
-          <td key="prdDate" className="td-due">
+          <td key="prdDate" className="td-meta">
             <textarea
               className="editable-ta"
               defaultValue={project.prdDate || ''}
@@ -240,7 +251,7 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
         );
       case 'due':
         return (
-          <td key="due" className="td-due">
+          <td key="due" className="td-meta">
             <textarea
               className="editable-ta"
               defaultValue={project.due || ''}
@@ -258,18 +269,16 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
               value={d.phase || ''}
               onChange={e => saveWeekFieldDirect(weekId, project.id, 'phase', e.target.value)}
             >
-              {PHASES.map(ph => <option key={ph} value={ph}>{ph || '— select —'}</option>)}
+              <option value="">—</option>
+              {PHASES.filter(Boolean).map(ph => <option key={ph} value={ph}>{ph}</option>)}
             </select>
           </td>
         );
       case 'status':
         return (
           <td key="status" className="td-status">
-            <StatusPill status={status} onStatusChange={setStatus} />
-            <div className="td-save">
-              <button className="btn btn-save btn-sm" onClick={handleSave}>Save</button>
-              {savedAt && <span className="save-ts">✓ {tago(savedAt)}</span>}
-            </div>
+            <StatusPill status={status} onStatusChange={handleStatusChange} />
+            {justSaved && <span className="auto-saved">✓ saved</span>}
           </td>
         );
       case 'v': {
@@ -409,9 +418,7 @@ export default function OKRPage() {
   const setFilter   = useStore(s => s.setFilter);
   const clearFilters= useStore(s => s.clearFilters);
   const getTableCols= useStore(s => s.getTableCols);
-  const saveUpdate  = useStore(s => s.saveUpdate);
   const saveProjectField = useStore(s => s.saveProjectField);
-  const saveEngNotes= useStore(s => s.saveEngNotes);
   const saveWeekFieldDirect = useStore(s => s.saveWeekFieldDirect);
   const team        = useStore(s => s.team);
 
@@ -576,8 +583,6 @@ export default function OKRPage() {
                         tableCols={tableCols}
                         ncols={ncols}
                         saveProjectField={saveProjectField}
-                        saveUpdate={saveUpdate}
-                        saveEngNotes={saveEngNotes}
                         saveWeekFieldDirect={saveWeekFieldDirect}
                         team={team}
                       />
