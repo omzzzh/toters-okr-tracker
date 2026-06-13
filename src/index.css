@@ -155,42 +155,48 @@ input,textarea,select{font:inherit}
 .proj-table td{border-bottom:1px solid var(--rule);padding:0;vertical-align:top;background:var(--white);font-size:13px;font-family:var(--sans);color:var(--ink2)}
 .proj-table tr:hover td{background:#f8f9fb}
 
+/* All cells: consistent base */
+.proj-table td{border-bottom:1px solid var(--rule);padding:9px 10px;vertical-align:top;background:var(--white);font-size:13px;font-family:var(--sans);color:var(--ink2)}
+
 /* name cell */
-.td-proj{padding:9px 10px}
-.td-name{font-size:13px;font-weight:500;color:var(--ink);line-height:1.45;width:100%;background:transparent;border:none;outline:none;resize:none;font-family:var(--sans)}
-.td-name:focus{color:var(--ink)}
-.row-actions{display:flex;align-items:center;gap:6px;margin-top:4px;min-height:20px}
-.stale-dot{width:5px;height:5px;border-radius:50%;background:var(--amber);flex-shrink:0;opacity:.6;title:"Not updated this week"}
-.comment-btn{opacity:0;transition:opacity .15s;font-size:10.5px;color:var(--ink3);background:none;border:1px solid transparent;border-radius:4px;padding:1px 6px;cursor:pointer;white-space:nowrap;font-family:var(--sans)}
+.td-proj{padding:0}
+.td-name{font-size:13px;font-weight:500;color:var(--ink);line-height:1.45;width:100%;background:transparent;border:none;outline:none;resize:none;font-family:var(--sans);padding:9px 10px 4px;display:block}
+.td-name:focus{background:#f0f7ff}
+.row-actions{display:flex;align-items:center;gap:5px;padding:0 10px 6px;height:22px}
+.stale-dot{width:5px;height:5px;border-radius:50%;background:var(--amber);flex-shrink:0;opacity:.65}
+.comment-btn{opacity:0;transition:opacity .15s;font-size:10.5px;color:var(--ink3);background:none;border:1px solid transparent;border-radius:4px;padding:1px 6px;cursor:pointer;white-space:nowrap;font-family:var(--sans);line-height:1.4}
 .comment-btn:hover{background:var(--paper2);border-color:var(--rule2)}
 .comment-btn.active{opacity:1;color:var(--accent);border-color:var(--accent)}
 .comment-btn.has-comments{color:var(--blue)}
 .proj-table tr:hover .comment-btn{opacity:1}
 
 /* owner cell */
-.td-owner{padding:8px 10px;cursor:pointer}
+.td-owner{padding:9px 10px;cursor:pointer;vertical-align:middle}
 .td-owner-chip{display:inline-flex;align-items:center;gap:5px;background:var(--paper2);border-radius:12px;padding:2px 8px 2px 4px;font-size:11px;color:var(--ink2);margin-bottom:3px;font-family:var(--mono)}
 .td-owner-av{width:16px;height:16px;border-radius:50%;background:var(--accent);color:#fff;font-size:7px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:var(--display);flex-shrink:0}
 
-/* text area cells */
+/* text area cells — padding on the textarea itself so click area fills the cell */
 .td-ta{padding:0}
 .td-ta textarea{width:100%;min-height:0;height:auto;background:transparent;border:none;outline:none;resize:none;font-family:var(--sans);font-size:13px;color:var(--ink2);padding:9px 10px;line-height:1.55;transition:background .1s;display:block}
 .td-ta textarea:focus{background:#f0f7ff}
 .td-ta textarea::placeholder{color:var(--ink4)}
 
-/* meta / date cells */
-.td-meta{padding:9px 10px}
-.td-due{padding:9px 10px}
+/* date picker cells */
+.td-date{padding:9px 10px;vertical-align:middle}
+.date-input{width:100%;border:none;background:transparent;font-family:var(--sans);font-size:13px;color:var(--ink2);outline:none;cursor:pointer;padding:0;line-height:1.45}
+.date-input::-webkit-calendar-picker-indicator{opacity:.4;cursor:pointer;margin-left:2px}
+.date-input:focus{outline:none}
+.date-input:hover::-webkit-calendar-picker-indicator{opacity:.8}
 
 /* phase cell */
-.td-phase{padding:7px 10px;vertical-align:middle}
-.phase-sel{appearance:none;-webkit-appearance:none;background:var(--paper2);border:1px solid var(--rule2);border-radius:20px;outline:none;font-family:var(--sans);font-size:11.5px;color:var(--ink2);cursor:pointer;padding:3px 10px;width:100%}
+.td-phase{padding:9px 10px;vertical-align:middle}
+.phase-sel{appearance:none;-webkit-appearance:none;background:var(--paper2);border:1px solid var(--rule2);border-radius:20px;outline:none;font-family:var(--sans);font-size:12px;color:var(--ink2);cursor:pointer;padding:3px 10px;max-width:100%}
 .phase-sel:hover{border-color:var(--rule3,#bbb)}
 .phase-sel:focus{border-color:var(--accent);background:#f0f7ff}
 
 /* status cell */
 .td-status{padding:9px 10px;vertical-align:top}
-.status-pill{display:inline-flex;align-items:center;gap:6px;border-radius:6px;padding:4px 9px;font-size:11.5px;font-weight:600;font-family:var(--display);letter-spacing:.01em;cursor:pointer;position:relative;transition:opacity .12s}
+.status-pill{display:inline-flex;align-items:center;gap:6px;border-radius:6px;padding:4px 9px;font-size:12px;font-weight:600;font-family:var(--display);letter-spacing:.01em;cursor:pointer;position:relative;transition:opacity .12s}
 .status-pill:hover{opacity:.85}
 .status-pill-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
 .status-pill select{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;font-size:13px}
@@ -225,9 +231,9 @@ input,textarea,select{font:inherit}
 /* ── INLINE EDITABLE ── */
 .editable-wrap{position:relative}
 .editable-input{width:100%;background:transparent;border:none;outline:none;font-family:inherit;font-size:inherit;color:inherit;font-weight:inherit;padding:0;cursor:text;resize:none}
-.editable-input:focus{background:#f0f7ff;border-radius:3px;padding:1px 3px;margin:-1px -3px}
+.editable-input:focus{background:#f0f7ff;border-radius:3px}
 .editable-single{width:100%;background:transparent;border:none;outline:none;font-family:inherit;font-size:inherit;color:inherit;font-weight:inherit;padding:0;cursor:text}
-.editable-single:focus{background:#f0f7ff;border-radius:3px;padding:1px 3px;margin:-1px -3px;width:calc(100% + 6px)}
+.editable-single:focus{background:#f0f7ff;border-radius:3px}
 
 /* ── COMMENTS ── */
 .td-comments-row td{background:var(--paper);border-top:none;padding:0}
@@ -591,8 +597,9 @@ input,textarea,select{font:inherit}
 .ms-footer-sep{flex:1}
 
 /* ── EDITABLE TEXTAREA CELLS ── */
-.editable-ta{width:100%;background:transparent;border:none;outline:none;font-family:inherit;font-size:inherit;color:inherit;font-weight:inherit;padding:0;cursor:text;resize:none;overflow:hidden;line-height:1.45;display:block}
-.editable-ta:focus{background:#f0f7ff;border-radius:3px;padding:1px 3px;margin:-1px -3px;width:calc(100% + 6px)}
+.editable-ta{width:100%;background:transparent;border:none;outline:none;font-family:var(--sans);font-size:13px;color:var(--ink2);font-weight:400;padding:0;cursor:text;resize:none;overflow:hidden;line-height:1.45;display:block}
+.editable-ta:focus{background:#f0f7ff;border-radius:3px}
+.proj-table tr.row-stale .editable-ta{color:var(--ink3)!important}
 .proj-table tr.row-stale .editable-ta{color:var(--ink3)!important}
 
 /* ── MISC ── */

@@ -18,7 +18,14 @@ function renderMentionsHtml(text) {
 function autogrow(el) {
   if (!el) return;
   el.style.height = 'auto';
-  el.style.height = Math.max(88, el.scrollHeight) + 'px';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function toISODate(str) {
+  if (!str || str === '—') return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  const d = new Date(/\d{4}/.test(str) ? str : `${str} 2026`);
+  return isNaN(d) ? '' : d.toISOString().slice(0, 10);
 }
 
 function StatusPill({ status, onStatusChange }) {
@@ -117,6 +124,8 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
   const [plan, setPlan] = useState(d.plan || '');
   const [engNotes, setEngNotes] = useState(d.engNotes || '');
   const [status, setStatus] = useState(d.status || 'Not started');
+  const [prdDate, setPrdDate] = useState(() => toISODate(project.prdDate || ''));
+  const [due, setDue] = useState(() => toISODate(project.due || ''));
   const [showComments, setShowComments] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const { popup: mentionPopup, onInput: onMentionInput, onKeyDown: onMentionKeyDown, insertMention, close: closeMention } = useMention(team);
@@ -131,6 +140,8 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
     setPlan(d.plan || '');
     setEngNotes(d.engNotes || '');
     setStatus(d.status || 'Not started');
+    setPrdDate(toISODate(project.prdDate || ''));
+    setDue(toISODate(project.due || ''));
   }, [weekId, project.id]);
 
   useEffect(() => { autogrow(progressRef.current); }, [progress]);
@@ -239,25 +250,29 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
         );
       case 'prdDate':
         return (
-          <td key="prdDate" className="td-meta">
-            <textarea
-              className="editable-ta"
-              defaultValue={project.prdDate || ''}
-              ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
-              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
-              onBlur={e => saveProjectField(project.id, 'prdDate', e.target.value)}
+          <td key="prdDate" className="td-date">
+            <input
+              type="date"
+              className="date-input"
+              value={prdDate}
+              onChange={e => {
+                setPrdDate(e.target.value);
+                saveProjectField(project.id, 'prdDate', e.target.value);
+              }}
             />
           </td>
         );
       case 'due':
         return (
-          <td key="due" className="td-meta">
-            <textarea
-              className="editable-ta"
-              defaultValue={project.due || ''}
-              ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
-              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
-              onBlur={e => saveProjectField(project.id, 'due', e.target.value)}
+          <td key="due" className="td-date">
+            <input
+              type="date"
+              className="date-input"
+              value={due}
+              onChange={e => {
+                setDue(e.target.value);
+                saveProjectField(project.id, 'due', e.target.value);
+              }}
             />
           </td>
         );
