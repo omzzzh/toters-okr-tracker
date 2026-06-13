@@ -9,9 +9,12 @@ const lsGet = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
 // ── Column config helpers ─────────────────────────
+const TABLE_HIDDEN = new Set(['v', 'obj']);
+
 const DEFAULT_COL_CONFIG = () =>
   COL_DEFS.map((c, i) => ({
-    key: c.key, labelOverride: '', showInTable: true, showInGrid: true,
+    key: c.key, labelOverride: '',
+    showInTable: !TABLE_HIDDEN.has(c.key), showInGrid: true,
     showAsFilter: c.canFilter, order: i, widthPct: DEFAULT_COL_WIDTHS[c.key] || 10,
   }));
 
@@ -19,10 +22,11 @@ const mergeColConfig = (saved) => {
   const merged = saved ? [...saved] : DEFAULT_COL_CONFIG();
   COL_DEFS.forEach((c, i) => {
     if (!merged.find(x => x.key === c.key)) {
-      merged.push({ key: c.key, labelOverride: '', showInTable: true, showInGrid: true, showAsFilter: c.canFilter, order: merged.length + i, widthPct: DEFAULT_COL_WIDTHS[c.key] || 10 });
+      merged.push({ key: c.key, labelOverride: '', showInTable: !TABLE_HIDDEN.has(c.key), showInGrid: true, showAsFilter: c.canFilter, order: merged.length + i, widthPct: DEFAULT_COL_WIDTHS[c.key] || 10 });
     }
     const ex = merged.find(x => x.key === c.key);
     if (ex && ex.widthPct == null) ex.widthPct = DEFAULT_COL_WIDTHS[c.key] || 10;
+    if (ex && TABLE_HIDDEN.has(c.key)) ex.showInTable = false;
   });
   return merged;
 };
