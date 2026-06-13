@@ -91,7 +91,7 @@ export const COL_DEFS = [
   { key: 'owner',    label: 'Owner',                type: 'text',                                                canFilter: true,  weekField: false },
   { key: 'prdDate',  label: 'Original PRD Date',    type: 'text',                                                canFilter: false, weekField: false },
   { key: 'due',      label: 'Due Date',             type: 'text',                                                canFilter: false, weekField: false },
-  { key: 'phase',    label: 'Phase',                type: 'select', opts: () => PHASES.filter(Boolean),          canFilter: true,  weekField: false },
+  { key: 'phase',    label: 'Phase',                type: 'select', opts: () => PHASES.filter(Boolean),          canFilter: true,  weekField: true  },
   { key: 'status',   label: 'Status',               type: 'select', opts: () => STATUSES,                       canFilter: true,  weekField: false },
   { key: 'progress', label: 'Progress this week',   type: 'text',                                                canFilter: false, weekField: true  },
   { key: 'plan',     label: 'Plan for next week',   type: 'text',                                                canFilter: false, weekField: true  },

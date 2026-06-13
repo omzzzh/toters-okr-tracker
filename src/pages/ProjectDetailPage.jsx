@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import useStore from '../store/index';
 import { VMETA, PHASE_COLORS, STATUS_COLORS } from '../data/constants';
-import { tago } from '../utils/helpers';
-import { OwnerChips } from '../components/ui/OwnerChip';
+import { tago, resolveOwnerNames } from '../utils/helpers';
+import { OwnerChipsByIds } from '../components/ui/OwnerChip';
 import { useToastCtx } from '../App';
 import { useMention, getMentionedMembers } from '../hooks/useMention';
 import { emailProjectOwners, emailMentioned } from '../utils/email';
@@ -25,6 +25,7 @@ export default function ProjectDetailPage() {
   const addComment = useStore(s => s.addComment);
   const settings = useStore(s => s.settings);
   const team = useStore(s => s.team);
+  const objectives = useStore(s => s.objectives);
   const showToast = useToastCtx();
 
   const [selectedId, setSelectedId] = useState(projects[0]?.id || null);
@@ -42,15 +43,17 @@ export default function ProjectDetailPage() {
     return weekData[weeks[0]?.id]?.[pid]?.status || 'Not started';
   };
 
-  const filteredList = useMemo(() =>
-    projects.filter(p =>
-      !listSearch ||
-      p.name.toLowerCase().includes(listSearch.toLowerCase()) ||
-      p.owner.toLowerCase().includes(listSearch.toLowerCase()) ||
-      p.obj.toLowerCase().includes(listSearch.toLowerCase())
-    ),
-    [projects, listSearch]
-  );
+  const filteredList = useMemo(() => {
+    const objById = Object.fromEntries(objectives.map(o => [o.id, o]));
+    return projects.filter(p => {
+      if (!listSearch) return true;
+      const ownerNames = resolveOwnerNames(p.ownerIds, team).join(' ').toLowerCase();
+      const objLabel = (p.objectiveId ? objById[p.objectiveId]?.label : '') || '';
+      return p.name.toLowerCase().includes(listSearch.toLowerCase()) ||
+             ownerNames.includes(listSearch.toLowerCase()) ||
+             objLabel.toLowerCase().includes(listSearch.toLowerCase());
+    });
+  }, [projects, listSearch, team, objectives]);
 
   // All weekly updates for selected project (most recent first)
   const weekUpdates = useMemo(() => {
@@ -123,7 +126,7 @@ export default function ProjectDetailPage() {
                 <div className="pd-list-name">{p.name}</div>
               </div>
               <div className="pd-list-meta">
-                <span>{p.owner || '—'}</span>
+                <span>{resolveOwnerNames(p.ownerIds, team).join(', ') || '—'}</span>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: STATUS_COLORS[s] || '#d0ccc4', flexShrink: 0 }} />
               </div>
             </div>
@@ -152,21 +155,21 @@ export default function ProjectDetailPage() {
                 <span className={`badge ${STATUS_BADGE[getLatestStatus(project.id)] || 'b-gray'}`}>
                   {getLatestStatus(project.id)}
                 </span>
-                {project.phase && (
-                  <span style={{
-                    fontSize: 11, fontWeight: 600,
-                    color: PHASE_COLORS[project.phase],
-                    background: PHASE_COLORS[project.phase] + '22',
-                    padding: '2px 8px', borderRadius: 10,
-                  }}>
-                    {project.phase}
+                {(() => {
+                const latestPhase = (() => { for (let i = weeks.length - 1; i >= 0; i--) { const d = weekData[weeks[i].id]?.[project.id]; if (d?.phase) return d.phase; } return ''; })();
+                return latestPhase ? (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: PHASE_COLORS[latestPhase], background: PHASE_COLORS[latestPhase] + '22', padding: '2px 8px', borderRadius: 10 }}>
+                    {latestPhase}
                   </span>
-                )}
+                ) : null;
+              })()}
               </div>
               <div className="pd-detail-title">{project.name}</div>
-              {project.obj && <div className="pd-detail-obj">{project.obj}</div>}
+              {project.objectiveId && (
+                <div className="pd-detail-obj">{objectives.find(o => o.id === project.objectiveId)?.label || ''}</div>
+              )}
               <div className="pd-detail-meta-row">
-                {project.owner && <OwnerChips ownerStr={project.owner} />}
+                {project.ownerIds?.length > 0 && <OwnerChipsByIds ownerIds={project.ownerIds} team={team} />}
                 {project.due && <span>📅 Due: {project.due}</span>}
                 {project.prdDate && <span>📄 Original PRD: {project.prdDate}</span>}
               </div>
@@ -249,6 +252,9 @@ export default function ProjectDetailPage() {
                     <div className="pd-week-header">
                       <span className="pd-week-label">{week.label}</span>
                       <span className={`badge ${STATUS_BADGE[s] || 'b-gray'}`} style={{ fontSize: 10 }}>{s}</span>
+                      {data.phase && (
+                        <span style={{ fontSize: 10, fontWeight: 600, color: PHASE_COLORS[data.phase], background: PHASE_COLORS[data.phase] + '22', padding: '1px 6px', borderRadius: 8 }}>{data.phase}</span>
+                      )}
                       {data.updated_at && (
                         <span className="pd-week-ts">{tago(data.updated_at)}</span>
                       )}

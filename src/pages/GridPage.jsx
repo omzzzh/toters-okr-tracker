@@ -28,6 +28,8 @@ export default function GridPage() {
   const saveProjectField = useStore(s => s.saveProjectField);
   const addProject = useStore(s => s.addProject);
   const deleteProjects = useStore(s => s.deleteProjects);
+  const team = useStore(s => s.team);
+  const quarters = useStore(s => s.quarters);
   const showToast = useToastCtx();
 
   const [quarter, setQuarter] = useState('all');
@@ -40,7 +42,7 @@ export default function GridPage() {
   const [lastClick, setLastClick] = useState(-1);
   const wrapRef = useRef(null);
 
-  const allQuarters = ['all', ...[...new Set(weeks.map(w => w.quarter || 'Q2 2026'))].sort().reverse()];
+  const allQuarters = ['all', ...[...new Set(weeks.map(w => w.quarterId || 'q2-2026'))].sort().reverse()];
   const activeCols = getGridCols();
 
   const getWid = useCallback((pid) => latestWeekIdForProject(pid, quarter), [quarter, latestWeekIdForProject, weekData]);
@@ -49,7 +51,7 @@ export default function GridPage() {
     let rows = projects
       .filter(p =>
         (vertical.length === 0 || vertical.includes(p.v)) &&
-        (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.owner.toLowerCase().includes(search.toLowerCase()) || p.obj.toLowerCase().includes(search.toLowerCase()))
+        (!search || p.name.toLowerCase().includes(search.toLowerCase()) || (p.ownerIds || []).some(id => { const m = team?.find(t => t.id === id); return m?.name.toLowerCase().includes(search.toLowerCase()); }))
       )
       .map((p, i) => {
         const wid = getWid(p.id);
@@ -58,6 +60,7 @@ export default function GridPage() {
         activeCols.forEach(c => {
           if (c.weekField) row[c.key] = d[c.key] || '';
           else if (c.key === 'v') row[c.key] = VMETA[p.v]?.label || p.v;
+          else if (c.key === 'owner') row[c.key] = (p.ownerIds || []).map(id => team.find(t => t.id === id)?.name).filter(Boolean).join(' / ');
           else row[c.key] = p[c.key] || '';
         });
         row.status = d.status || 'Not started';
@@ -156,8 +159,9 @@ export default function GridPage() {
       const newP = {
         id: 'u' + Date.now() + Math.random().toString(36).slice(2, 6),
         v: vEntry ? vEntry[0] : 'shopping',
-        obj: row.obj || 'Other', name: (row.name || 'Project') + ' (copy)',
-        owner: row.owner || '', prdDate: row.prdDate || '', due: row.due || '', phase: row.phase || '',
+        name: (row.name || 'Project') + ' (copy)',
+        ownerIds: [], prdDate: row.prdDate || '', due: row.due || '',
+        quarterId: quarters[0]?.id || 'q2-2026', objectiveId: row.objectiveId || '',
       };
       addProject(newP);
       const wid = activeWeek;
@@ -182,7 +186,8 @@ export default function GridPage() {
     const newP = {
       id: 'u' + Date.now(),
       v: vertical.length === 1 ? vertical[0] : 'shopping',
-      obj: 'New objective', name: 'New project', owner: '', prdDate: '', due: '', phase: '',
+      name: 'New project', ownerIds: [], prdDate: '', due: '',
+      quarterId: quarters[0]?.id || 'q2-2026', objectiveId: '',
     };
     addProject(newP);
     showToast('✓ Row added');

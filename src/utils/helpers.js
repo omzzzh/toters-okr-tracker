@@ -55,6 +55,9 @@ export const initials = (name) =>
 export const ownerList = (ownerStr) =>
   String(ownerStr || '').split(/\/|,/).map(s => s.trim()).filter(Boolean);
 
+export const resolveOwnerNames = (ownerIds, team) =>
+  (ownerIds || []).map(id => team.find(m => m.id === id)?.name).filter(Boolean);
+
 export const renderMentions = (text) =>
   String(text || '').replace(/@([\w.]+@[\w.]+)/g, '<span class="mention-tag">@$1</span>');
 

@@ -5,22 +5,19 @@ function initials(name) {
   return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 
+// value: string[] of IDs; onChange(string[]) emits IDs
 export default function OwnerPicker({ value, onChange, team, compact = false }) {
-  const [open, setOpen]     = useState(false);
-  const [q, setQ]           = useState('');
+  const [open, setOpen]       = useState(false);
+  const [q, setQ]             = useState('');
   const [dropPos, setDropPos] = useState(null);
-  const triggerRef          = useRef(null);
-  const dropRef             = useRef(null);
+  const triggerRef            = useRef(null);
+  const dropRef               = useRef(null);
 
-  const selected = value
-    ? value.split(/\/|,/).map(n => n.trim()).filter(Boolean)
-    : [];
+  const selected = Array.isArray(value) ? value : [];
 
-  const toggle = (name) => {
-    const next = selected.includes(name)
-      ? selected.filter(n => n !== name)
-      : [...selected, name];
-    onChange(next.join(' / '));
+  const toggle = (id) => {
+    const next = selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id];
+    onChange(next);
   };
 
   const openDrop = () => {
@@ -77,10 +74,10 @@ export default function OwnerPicker({ value, onChange, team, compact = false }) 
       <div className="owner-picker-list">
         {filtered.map(m => (
           <div
-            key={m.id || m.name}
-            className={'owner-picker-item' + (selected.includes(m.name) ? ' selected' : '')}
+            key={m.id}
+            className={'owner-picker-item' + (selected.includes(m.id) ? ' selected' : '')}
             style={compact ? { padding: '6px 12px' } : undefined}
-            onClick={e => { e.stopPropagation(); toggle(m.name); }}
+            onClick={e => { e.stopPropagation(); toggle(m.id); }}
           >
             <div
               className="owner-picker-av"
@@ -92,7 +89,7 @@ export default function OwnerPicker({ value, onChange, team, compact = false }) 
               <div style={{ fontSize: compact ? 12.5 : 13, fontWeight: 500 }}>{m.name}</div>
               {!compact && m.jobFamily && <div style={{ fontSize: 11, color: 'var(--ink3)' }}>{m.jobFamily}</div>}
             </div>
-            {selected.includes(m.name) && <span style={{ color: 'var(--accent)', fontSize: compact ? 12 : 14 }}>✓</span>}
+            {selected.includes(m.id) && <span style={{ color: 'var(--accent)', fontSize: compact ? 12 : 14 }}>✓</span>}
           </div>
         ))}
         {filtered.length === 0 && (
@@ -105,7 +102,7 @@ export default function OwnerPicker({ value, onChange, team, compact = false }) 
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: '2px 8px' }}
-            onClick={e => { e.stopPropagation(); onChange(''); }}
+            onClick={e => { e.stopPropagation(); onChange([]); }}
           >
             Clear
           </button>
@@ -124,12 +121,13 @@ export default function OwnerPicker({ value, onChange, team, compact = false }) 
           {selected.length === 0 ? (
             <span style={{ color: 'var(--ink4)', fontSize: 11 }}>—</span>
           ) : (
-            selected.map(n => {
-              const m = team.find(t => t.name === n);
+            selected.map(id => {
+              const m = team.find(t => t.id === id);
+              if (!m) return null;
               return (
-                <span key={n} className="owner-chip owner-chip-sm">
-                  <span className="owner-chip-av" style={{ background: m?.color || '#9ca3af' }}>{initials(n)}</span>
-                  <span className="owner-chip-name">{n}</span>
+                <span key={id} className="owner-chip owner-chip-sm">
+                  <span className="owner-chip-av" style={{ background: m.color }}>{initials(m.name)}</span>
+                  <span className="owner-chip-name">{m.name}</span>
                 </span>
               );
             })
@@ -153,11 +151,12 @@ export default function OwnerPicker({ value, onChange, team, compact = false }) 
           <span style={{ color: 'var(--ink4)' }}>Select owners…</span>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {selected.map(n => {
-              const m = team.find(t => t.name === n);
+            {selected.map(id => {
+              const m = team.find(t => t.id === id);
+              if (!m) return null;
               return (
-                <span key={n} className="owner-picker-chip" style={{ background: m?.color || '#9ca3af' }}>
-                  {initials(n)} {n}
+                <span key={id} className="owner-picker-chip" style={{ background: m.color }}>
+                  {initials(m.name)} {m.name}
                 </span>
               );
             })}

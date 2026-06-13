@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import useStore from '../store/index';
 import { VMETA, VORDER, STATUS_META } from '../data/constants';
 import { tago } from '../utils/helpers';
-import { OwnerChip } from '../components/ui/OwnerChip';
+import { OwnerChip, OwnerChipsByIds } from '../components/ui/OwnerChip';
 import { useToastCtx } from '../App';
 
 function sbadge(s) {
@@ -18,6 +18,7 @@ export default function ExecPage() {
   const aiCache = useStore(s => s.aiCache);
   const setAICache = useStore(s => s.setAICache);
   const settings = useStore(s => s.settings);
+  const team = useStore(s => s.team);
   const showToast = useToastCtx();
 
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -54,7 +55,8 @@ export default function ExecPage() {
     const updatedProjs = projects.filter(p => weekData[activeWeek]?.[p.id]?.updated_at);
     const summaryData = updatedProjs.slice(0, 30).map(p => {
       const d = wd(p.id);
-      return `[${VMETA[p.v]?.label}] ${p.name} (${p.owner}) — Status: ${d.status} | Progress: ${d.progress} | Plan: ${d.plan}`;
+      const ownerStr = (p.ownerIds || []).map(id => team.find(m => m.id === id)?.name).filter(Boolean).join(', ');
+      return `[${VMETA[p.v]?.label}] ${p.name} (${ownerStr}) — Status: ${d.status} | Progress: ${d.progress} | Plan: ${d.plan}`;
     }).join('\n');
 
     const prompt = `You are writing an executive summary for a product team's weekly OKR update.\n\nWeek: ${wk?.label}\n\nHere is the project update data:\n${summaryData}\n\nWrite a concise executive summary (4-6 paragraphs) that:\n1. Opens with an overall health statement and key momentum\n2. Highlights the most important progress and any launches\n3. Calls out specific blockers and delays that need attention (${atR} projects are at risk)\n4. Ends with the main priorities for next week\n\nWrite in a direct, executive-friendly tone. Be specific about project names and verticals. Don't use bullet points — write flowing paragraphs.`;
@@ -157,7 +159,7 @@ export default function ExecPage() {
                   <tr key={p.id} className="good-row">
                     <td style={{ fontWeight: 500 }}>{p.name}</td>
                     <td><span style={{ fontSize: 11, color: VMETA[p.v]?.color, fontWeight: 600 }}>{VMETA[p.v]?.label}</span></td>
-                    <td>{p.owner ? <OwnerChip name={p.owner.split(/\/|,/)[0].trim()} size="sm" /> : null}</td>
+                    <td><OwnerChipsByIds ownerIds={p.ownerIds} team={team} size="sm" /></td>
                     <td style={{ fontSize: 12.5 }}>{d.progress}</td>
                   </tr>
                 );
@@ -187,7 +189,7 @@ export default function ExecPage() {
                 <tr key={p.id} className="good-row">
                   <td style={{ fontWeight: 500, fontSize: 12.5 }}>{p.name}</td>
                   <td><span style={{ fontSize: 11, color: VMETA[p.v]?.color, fontWeight: 600 }}>{VMETA[p.v]?.label}</span></td>
-                  <td style={{ fontSize: 12, color: 'var(--ink3)' }}>{p.owner}</td>
+                  <td style={{ fontSize: 12, color: 'var(--ink3)' }}>{(p.ownerIds || []).map(id => team.find(m => m.id === id)?.name).filter(Boolean).join(', ')}</td>
                   <td style={{ fontSize: 12.5 }}>{d.progress}</td>
                   <td style={{ fontSize: 12.5 }}>{d.plan}</td>
                 </tr>
@@ -217,7 +219,7 @@ export default function ExecPage() {
                     <td style={{ fontWeight: 500, fontSize: 12.5 }}>{p.name}</td>
                     <td><span style={{ fontSize: 11, color: VMETA[p.v]?.color, fontWeight: 600 }}>{VMETA[p.v]?.label}</span></td>
                     <td>{sbadge(d.status)}</td>
-                    <td>{p.owner ? <OwnerChip name={p.owner.split(/\/|,/)[0].trim()} size="sm" /> : null}</td>
+                    <td><OwnerChipsByIds ownerIds={p.ownerIds} team={team} size="sm" /></td>
                     <td style={{ fontSize: 12.5 }}>{d.progress}</td>
                   </tr>
                 );

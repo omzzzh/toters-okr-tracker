@@ -3,7 +3,7 @@ import useStore from '../store/index';
 import { VMETA, VORDER, STATUS_META, STATUSES, PHASES, PHASE_COLORS, STATUS_COLORS, SHORT_MONTHS } from '../data/constants';
 import MultiSelect from '../components/ui/MultiSelect';
 import { OwnerChips } from '../components/ui/OwnerChip';
-import { tago, buildSegments, calcAvgDays } from '../utils/helpers';
+import { tago, buildSegments, calcAvgDays, resolveOwnerNames } from '../utils/helpers';
 
 function fmtDate(ts) {
   if (!ts) return '—';
@@ -40,6 +40,7 @@ export default function AnalyticsPage() {
   const weekData = useStore(s => s.weekData);
   const weeks = useStore(s => s.weeks);
   const changeLog = useStore(s => s.changeLog);
+  const team = useStore(s => s.team);
 
   const [filterV, setFilterV] = useState([]);
   const [filterPhase, setFilterPhase] = useState([]);
@@ -55,14 +56,24 @@ export default function AnalyticsPage() {
     return weekData[weeks[0]?.id]?.[pid]?.status || 'Not started';
   };
 
+  // Latest phase from weekData (phase is now per-week)
+  const getLatestPhase = (pid) => {
+    for (let i = weeks.length - 1; i >= 0; i--) {
+      const d = weekData[weeks[i].id]?.[pid];
+      if (d?.phase) return d.phase;
+    }
+    return '';
+  };
+
   const filtered = useMemo(() => projects.filter(p => {
     if (filterV.length > 0 && !filterV.includes(p.v)) return false;
-    if (filterPhase.length > 0 && !filterPhase.includes(p.phase || '')) return false;
+    if (filterPhase.length > 0 && !filterPhase.includes(getLatestPhase(p.id))) return false;
     if (filterStatus.length > 0 && !filterStatus.includes(getLatestStatus(p.id))) return false;
+    const ownerNames = resolveOwnerNames(p.ownerIds, team);
     if (search && !p.name.toLowerCase().includes(search.toLowerCase()) &&
-        !p.owner.toLowerCase().includes(search.toLowerCase())) return false;
+        !ownerNames.some(n => n.toLowerCase().includes(search.toLowerCase()))) return false;
     return true;
-  }), [projects, filterV, filterPhase, filterStatus, search, weekData, weeks]);
+  }), [projects, filterV, filterPhase, filterStatus, search, weekData, weeks, team]);
 
   // ── KPI stats ──
   const total = filtered.length;
@@ -76,7 +87,7 @@ export default function AnalyticsPage() {
   PHASES.filter(Boolean).forEach(ph => { phaseCounts[ph] = 0; });
   phaseCounts['No phase'] = 0;
   filtered.forEach(p => {
-    const ph = p.phase || 'No phase';
+    const ph = getLatestPhase(p.id) || 'No phase';
     phaseCounts[ph] = (phaseCounts[ph] || 0) + 1;
   });
   const maxPhase = Math.max(1, ...Object.values(phaseCounts));
@@ -112,7 +123,8 @@ export default function AnalyticsPage() {
   projects.forEach(p => {
     const phLog = changeLog.filter(e => e.pid === p.id && e.field === 'phase');
     const reached = new Set(phLog.map(e => e.to));
-    if (p.phase) reached.add(p.phase);
+    const latestPh = getLatestPhase(p.id);
+    if (latestPh) reached.add(latestPh);
     reached.forEach(ph => {
       if (phaseReachCount[ph] !== undefined) phaseReachCount[ph]++;
     });
@@ -121,14 +133,17 @@ export default function AnalyticsPage() {
   // ── Owner workload ──
   const ownerMap = {};
   filtered.forEach(p => {
-    const owner = p.owner || 'Unassigned';
-    if (!ownerMap[owner]) ownerMap[owner] = { onTrack: 0, atRisk: 0, launched: 0, other: 0, total: 0 };
-    const s = getLatestStatus(p.id);
-    ownerMap[owner].total++;
-    if (s === 'Launched') ownerMap[owner].launched++;
-    else if (s === 'On Track' || s === 'PRD Complete') ownerMap[owner].onTrack++;
-    else if (s === 'Delayed' || s === 'Blocked') ownerMap[owner].atRisk++;
-    else ownerMap[owner].other++;
+    const ownerNames = resolveOwnerNames(p.ownerIds, team);
+    const owners = ownerNames.length ? ownerNames : ['Unassigned'];
+    owners.forEach(owner => {
+      if (!ownerMap[owner]) ownerMap[owner] = { onTrack: 0, atRisk: 0, launched: 0, other: 0, total: 0 };
+      const s = getLatestStatus(p.id);
+      ownerMap[owner].total++;
+      if (s === 'Launched') ownerMap[owner].launched++;
+      else if (s === 'On Track' || s === 'PRD Complete') ownerMap[owner].onTrack++;
+      else if (s === 'Delayed' || s === 'Blocked') ownerMap[owner].atRisk++;
+      else ownerMap[owner].other++;
+    });
   });
   const ownerRows = Object.entries(ownerMap).sort((a, b) => b[1].total - a[1].total).slice(0, 12);
 
@@ -313,10 +328,11 @@ export default function AnalyticsPage() {
           const badgeCls = STATUS_BADGE[latestStatus] || 'b-gray';
           const sparkWeeks = weeks.slice(-10);
 
+          const currentPhase = getLatestPhase(p.id);
           const phaseLog = projLog.filter(e => e.field === 'phase');
-          const phaseSegs = buildSegments(phaseLog, p.phase || '');
+          const phaseSegs = buildSegments(phaseLog, currentPhase);
           const totalDur = phaseSegs.reduce((a, s) => a + s.dur, 0) || 1;
-          const transitions = buildPhaseTransitions(phaseLog, p.phase);
+          const transitions = buildPhaseTransitions(phaseLog, currentPhase);
           const totalTrackedDays = transitions.reduce((a, t) => a + (t.days || 0), 0);
 
           return (
@@ -324,11 +340,11 @@ export default function AnalyticsPage() {
               <div className="ptc-header">
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: VMETA[p.v]?.color, flexShrink: 0 }} />
                 <div className="ptc-name">{p.name}</div>
-                <div className="ptc-owner">{p.owner ? <OwnerChips ownerStr={p.owner} size="sm" /> : null}</div>
+                <div className="ptc-owner">{p.ownerIds?.length ? <OwnerChips ownerStr={resolveOwnerNames(p.ownerIds, team).join(' / ')} size="sm" /> : null}</div>
                 <span className={`badge ${badgeCls}`}>{latestStatus}</span>
-                {p.phase && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: PHASE_COLORS[p.phase], background: PHASE_COLORS[p.phase] + '22', padding: '2px 8px', borderRadius: 10 }}>
-                    {p.phase}
+                {currentPhase && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: PHASE_COLORS[currentPhase], background: PHASE_COLORS[currentPhase] + '22', padding: '2px 8px', borderRadius: 10 }}>
+                    {currentPhase}
                   </span>
                 )}
                 {totalTrackedDays > 0 && (

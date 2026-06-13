@@ -14,7 +14,7 @@ function memberColor(name, team) {
   return found?.color || '#9ca3af';
 }
 
-/** Renders a single name as a chip. Pass `name` as a string. */
+/** Renders a single name as a chip. */
 export function OwnerChip({ name, size = 'md' }) {
   const team = useStore(s => s.team);
   const color = memberColor(name, team);
@@ -28,13 +28,33 @@ export function OwnerChip({ name, size = 'md' }) {
   );
 }
 
-/** Splits an owner string by / or , and renders each as a chip. */
+/** Splits an owner string by / or , and renders each as a chip. Legacy support. */
 export function OwnerChips({ ownerStr, size = 'md' }) {
   if (!ownerStr) return null;
   const names = ownerStr.split(/\/|,/).map(n => n.trim()).filter(Boolean);
   return (
     <div className="owner-chips-wrap">
       {names.map((n, i) => <OwnerChip key={i} name={n} size={size} />)}
+    </div>
+  );
+}
+
+/** Renders chips by resolving an array of owner IDs against the team list. */
+export function OwnerChipsByIds({ ownerIds, team, size = 'md' }) {
+  if (!ownerIds?.length) return null;
+  const sm = size === 'sm';
+  return (
+    <div className="owner-chips-wrap">
+      {ownerIds.map(id => {
+        const m = team.find(t => t.id === id);
+        if (!m) return null;
+        return (
+          <span key={id} className={'owner-chip' + (sm ? ' owner-chip-sm' : '')}>
+            <span className="owner-chip-av" style={{ background: m.color }}>{initials(m.name)}</span>
+            <span className="owner-chip-name">{m.name}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }

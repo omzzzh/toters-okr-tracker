@@ -37,7 +37,7 @@ function ScoreRow({ project, quarter }) {
     <tr>
       <td>
         <div style={{ fontWeight: 500, fontSize: 12.5 }}>{project.name}</div>
-        <div className="sc-obj-label">{project.owner}</div>
+        <div className="sc-obj-label">{project._ownerNames || ''}</div>
       </td>
       <td>
         <div className="score-input-wrap">
@@ -94,12 +94,21 @@ export default function ScoringPage() {
   const setScoringQuarter = useStore(s => s.setScoringQuarter);
   const weeks = useStore(s => s.weeks);
   const okrScores = useStore(s => s.okrScores);
+  const team = useStore(s => s.team);
 
-  const quarters = [...new Set(weeks.map(w => w.quarter || 'Q2 2026'))].sort().reverse();
+  const quartersStore = useStore(s => s.quarters);
+  const quarters = quartersStore.length
+    ? quartersStore.map(q => q.id).reverse()
+    : [...new Set(weeks.map(w => w.quarterId || 'q2-2026'))].sort().reverse();
 
   const verticalFilter = Array.isArray(scoringFilters.vertical) ? scoringFilters.vertical : (scoringFilters.vertical === 'all' ? [] : [scoringFilters.vertical]);
 
-  const filtered = projects.filter(p => {
+  const enriched = projects.map(p => ({
+    ...p,
+    _ownerNames: (p.ownerIds || []).map(id => team.find(m => m.id === id)?.name).filter(Boolean).join(', '),
+  }));
+
+  const filtered = enriched.filter(p => {
     if (verticalFilter.length > 0 && !verticalFilter.includes(p.v)) return false;
     if (scoringFilters.search && !p.name.toLowerCase().includes(scoringFilters.search.toLowerCase())) return false;
     if (scoringFilters.band !== 'all') {
@@ -138,7 +147,10 @@ export default function ScoringPage() {
             value={scoringQuarter}
             onChange={e => setScoringQuarter(e.target.value)}
           >
-            {quarters.map(q => <option key={q} value={q}>{q}</option>)}
+            {quarters.map(qId => {
+            const ql = quartersStore.find(q => q.id === qId)?.label || qId;
+            return <option key={qId} value={qId}>{ql}</option>;
+          })}
           </select>
           <MultiSelect
             options={VORDER.map(v => ({ value: v, label: VMETA[v].label, color: VMETA[v].color }))}

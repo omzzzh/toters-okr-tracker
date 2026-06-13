@@ -1,23 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import useStore from '../store/index';
-import { VMETA, VORDER, STATUS_META, PHASES, TEAM, STATUSES } from '../data/constants';
+import { VMETA, VORDER, STATUS_META, PHASES, STATUSES } from '../data/constants';
 import MultiSelect from '../components/ui/MultiSelect';
-import { OwnerChips } from '../components/ui/OwnerChip';
 import OwnerPicker from '../components/ui/OwnerPicker';
 import MentionPopup from '../components/ui/MentionPopup';
-import { tago, initials } from '../utils/helpers';
+import { tago } from '../utils/helpers';
 import { emailProjectOwners, emailMentioned } from '../utils/email';
 import { useMention, getMentionedMembers } from '../hooks/useMention';
 import { useToastCtx } from '../App';
 
-// ── helpers ──────────────────────────────────────
 function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-
-function sbadge(s) {
-  const m = { 'On Track': 'b-green', Launched: 'b-purple', 'PRD Complete': 'b-blue', Delayed: 'b-red', Blocked: 'b-red', 'Not started': 'b-gray', Paused: 'b-amber', Deprioritized: 'b-gray' };
-  return <span className={`badge ${m[s] || 'b-gray'}`}>{s}</span>;
-}
-
 
 function renderMentionsHtml(text) {
   return { __html: esc(text).replace(/@([\w.@totersapp.com]+)/g, '<span class="mention-tag">@$1</span>') };
@@ -29,8 +21,7 @@ function autogrow(el) {
   el.style.height = Math.max(88, el.scrollHeight) + 'px';
 }
 
-// ── Status pill ──────────────────────────────────
-function StatusPill({ pid, status, onStatusChange }) {
+function StatusPill({ status, onStatusChange }) {
   const meta = STATUS_META[status] || STATUS_META['Not started'];
   return (
     <div className={`status-pill ${meta.pill}`}>
@@ -50,7 +41,6 @@ function StatusPill({ pid, status, onStatusChange }) {
   );
 }
 
-// ── Comments section ────────────────────────────
 function Comments({ project, weekId, weekData }) {
   const addComment = useStore(s => s.addComment);
   const userName = useStore(s => s.userName);
@@ -121,10 +111,8 @@ function Comments({ project, weekId, weekData }) {
   );
 }
 
-// ── Project row (has own draft state) ──────────
-function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectField, saveUpdate, saveEngNotes }) {
+function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectField, saveUpdate, saveEngNotes, saveWeekFieldDirect, team }) {
   const d = weekData[weekId]?.[project.id] || {};
-  const team = useStore(s => s.team);
   const [progress, setProgress] = useState(d.progress || '');
   const [plan, setPlan] = useState(d.plan || '');
   const [engNotes, setEngNotes] = useState(d.engNotes || '');
@@ -172,7 +160,7 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
               onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
               onBlur={e => saveProjectField(project.id, 'name', e.target.value)}
             />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
               <button
                 className="btn btn-ghost btn-sm"
                 style={{ fontSize: 10.5, padding: '2px 8px', color: showComments ? 'var(--accent)' : 'var(--ink3)', borderColor: showComments ? 'var(--accent)' : 'var(--rule2)' }}
@@ -188,8 +176,8 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
         return (
           <td key="owner" className="td-owner">
             <OwnerPicker
-              value={project.owner}
-              onChange={v => saveProjectField(project.id, 'owner', v)}
+              value={project.ownerIds || []}
+              onChange={ids => saveProjectField(project.id, 'ownerIds', ids)}
               team={team}
               compact
             />
@@ -267,8 +255,8 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
           <td key="phase" className="td-phase">
             <select
               className="phase-sel"
-              value={project.phase || ''}
-              onChange={e => saveProjectField(project.id, 'phase', e.target.value)}
+              value={d.phase || ''}
+              onChange={e => saveWeekFieldDirect(weekId, project.id, 'phase', e.target.value)}
             >
               {PHASES.map(ph => <option key={ph} value={ph}>{ph || '— select —'}</option>)}
             </select>
@@ -277,7 +265,7 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
       case 'status':
         return (
           <td key="status" className="td-status">
-            <StatusPill pid={project.id} status={status} onStatusChange={setStatus} />
+            <StatusPill status={status} onStatusChange={setStatus} />
             <div className="td-save">
               <button className="btn btn-save btn-sm" onClick={handleSave}>Save</button>
               {savedAt && <span className="save-ts">✓ {tago(savedAt)}</span>}
@@ -290,6 +278,14 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
           <td key="v" className="td-due" style={{ fontSize: 11, color: m.color, fontWeight: 600 }}>{m.label}</td>
         );
       }
+      case 'obj': {
+        // Objective column — read-only display
+        return (
+          <td key="obj" className="td-due" style={{ fontSize: 11, color: 'var(--ink3)' }}>
+            {project._objectiveLabel || '—'}
+          </td>
+        );
+      }
       default: {
         const val = c.weekField ? (d[c.key] || '') : (project[c.key] || '');
         return (
@@ -299,7 +295,10 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
               defaultValue={val}
               ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
               onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
-              onBlur={e => saveProjectField(project.id, c.key, e.target.value)}
+              onBlur={e => {
+                if (c.weekField) saveWeekFieldDirect(weekId, project.id, c.key, e.target.value);
+                else saveProjectField(project.id, c.key, e.target.value);
+              }}
             />
           </td>
         );
@@ -328,9 +327,8 @@ function ProjectRow({ project, weekId, weekData, tableCols, ncols, saveProjectFi
 // ── Export helpers ───────────────────────────────
 function exportWeekPDF(wk, projects, weekData, tableCols) {
   if (!wk) return;
-  const filtProjects = projects;
   const byV = {};
-  filtProjects.forEach(p => { if (!byV[p.v]) byV[p.v] = {}; if (!byV[p.v][p.obj]) byV[p.v][p.obj] = []; byV[p.v][p.obj].push(p); });
+  projects.forEach(p => { if (!byV[p.v]) byV[p.v] = {}; const obj = p._objectiveLabel || 'Other'; if (!byV[p.v][obj]) byV[p.v][obj] = []; byV[p.v][obj].push(p); });
   const STATUS_BG = { 'On Track': '#eaf5ee', Launched: '#f4eefb', 'PRD Complete': '#edf4fd', Delayed: '#fdf0ef', Blocked: '#fdf0ef', 'Not started': '#f5f4f0', Paused: '#fdf6e3', Deprioritized: '#f5f4f0' };
   const STATUS_CLR = { 'On Track': '#1a7a4a', Launched: '#6b3fa0', 'PRD Complete': '#1a5fa8', Delayed: '#c0392b', Blocked: '#c0392b', 'Not started': '#7a8190', Paused: '#9a6200', Deprioritized: '#7a8190' };
   let body = `<h1 style="font-family:sans-serif;font-size:22px;font-weight:700;margin:0 0 4px">Toters Product — Weekly OKR Update</h1><p style="font-family:monospace;font-size:13px;color:#7a8190;margin:0 0 24px">Week of ${wk.label}</p>`;
@@ -346,14 +344,14 @@ function exportWeekPDF(wk, projects, weekData, tableCols) {
         const status = d.status || 'Not started';
         body += `<tr>${tableCols.map(c => {
           let val = '';
-          if (c.key === 'name') val = `<strong>${p.name}</strong><br/><span style="font-size:10px;color:#636b78">${p.obj}</span>`;
-          else if (c.key === 'owner') val = p.owner;
+          if (c.key === 'name') val = `<strong>${p.name}</strong><br/><span style="font-size:10px;color:#636b78">${p._objectiveLabel || ''}</span>`;
+          else if (c.key === 'owner') val = p._ownerNames || '';
           else if (c.key === 'progress') val = d.progress || '';
           else if (c.key === 'plan') val = d.plan || '';
           else if (c.key === 'engNotes') val = d.engNotes || '';
           else if (c.key === 'prdDate') val = p.prdDate || '';
           else if (c.key === 'due') val = p.due || '';
-          else if (c.key === 'phase') val = p.phase || '';
+          else if (c.key === 'phase') val = d.phase || '';
           else if (c.key === 'v') val = `<span style="color:${m.color};font-weight:600">${m.label}</span>`;
           else if (c.key === 'status') val = `<span style="background:${STATUS_BG[status]||'#f5f4f0'};color:${STATUS_CLR[status]||'#7a8190'};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">${status}</span>`;
           return `<td style="padding:7px 8px;border:1px solid #d8d5cc;vertical-align:top;line-height:1.5">${val}</td>`;
@@ -375,7 +373,7 @@ function exportGoogleDoc(wk, projects, weekData) {
   if (!wk) return;
   let content = `Toters Product — Weekly OKR Update\nWeek of ${wk.label}\n\n`;
   const byV = {};
-  projects.forEach(p => { if (!byV[p.v]) byV[p.v] = {}; if (!byV[p.v][p.obj]) byV[p.v][p.obj] = []; byV[p.v][p.obj].push(p); });
+  projects.forEach(p => { if (!byV[p.v]) byV[p.v] = {}; const obj = p._objectiveLabel || 'Other'; if (!byV[p.v][obj]) byV[p.v][obj] = []; byV[p.v][obj].push(p); });
   VORDER.forEach(v => {
     if (!byV[v]) return;
     content += `${VMETA[v].label.toUpperCase()}\n${'─'.repeat(40)}\n\n`;
@@ -383,7 +381,7 @@ function exportGoogleDoc(wk, projects, weekData) {
       content += `Objective: ${obj}\n\n`;
       projs.forEach(p => {
         const d = weekData[wk.id]?.[p.id] || {};
-        content += `  • ${p.name} (${p.owner})\n    Status: ${d.status || 'Not started'} | Phase: ${p.phase || '—'} | Due: ${p.due || '—'}\n`;
+        content += `  • ${p.name} (${p._ownerNames || '—'})\n    Status: ${d.status || 'Not started'} | Phase: ${d.phase || '—'} | Due: ${p.due || '—'}\n`;
         if (d.progress) content += `    Progress: ${d.progress}\n`;
         if (d.plan) content += `    Next week: ${d.plan}\n`;
         content += '\n';
@@ -402,18 +400,20 @@ function exportGoogleDoc(wk, projects, weekData) {
 
 // ── Main OKRPage ─────────────────────────────────
 export default function OKRPage() {
-  const projects = useStore(s => s.projects);
-  const weekData = useStore(s => s.weekData);
-  const activeWeek = useStore(s => s.activeWeek);
-  const weeks = useStore(s => s.weeks);
-  const filters = useStore(s => s.filters);
-  const setFilter = useStore(s => s.setFilter);
-  const clearFilters = useStore(s => s.clearFilters);
-  const getTableCols = useStore(s => s.getTableCols);
-  const saveUpdate = useStore(s => s.saveUpdate);
+  const projects    = useStore(s => s.projects);
+  const objectives  = useStore(s => s.objectives);
+  const weekData    = useStore(s => s.weekData);
+  const activeWeek  = useStore(s => s.activeWeek);
+  const weeks       = useStore(s => s.weeks);
+  const filters     = useStore(s => s.filters);
+  const setFilter   = useStore(s => s.setFilter);
+  const clearFilters= useStore(s => s.clearFilters);
+  const getTableCols= useStore(s => s.getTableCols);
+  const saveUpdate  = useStore(s => s.saveUpdate);
   const saveProjectField = useStore(s => s.saveProjectField);
-  const saveEngNotes = useStore(s => s.saveEngNotes);
-  const showToast = useToastCtx();
+  const saveEngNotes= useStore(s => s.saveEngNotes);
+  const saveWeekFieldDirect = useStore(s => s.saveWeekFieldDirect);
+  const team        = useStore(s => s.team);
 
   const wk = weeks.find(w => w.id === activeWeek);
   const tableCols = getTableCols();
@@ -422,14 +422,22 @@ export default function OKRPage() {
     return <div className="page"><div className="empty">No week selected.</div></div>;
   }
 
+  // Enrich projects with resolved objective label + owner names
+  const objById = Object.fromEntries(objectives.map(o => [o.id, o]));
+  const enriched = projects.map(p => ({
+    ...p,
+    _objectiveLabel: p.objectiveId ? (objById[p.objectiveId]?.label || '') : '',
+    _ownerNames: (p.ownerIds || []).map(id => team.find(m => m.id === id)?.name).filter(Boolean).join(' / '),
+  }));
+
   // Apply filters
-  let filt = projects.filter(p => {
+  let filt = enriched.filter(p => {
     const mv = filters.vertical.length === 0 || filters.vertical.includes(p.v);
     const pStatus = weekData[activeWeek]?.[p.id]?.status || 'Not started';
     const ms = filters.status.length === 0 || filters.status.includes(pStatus);
-    const ownerParts = p.owner.split(/\/|,/).map(s => s.trim().toLowerCase());
-    const mo = filters.owner.length === 0 || filters.owner.some(o => ownerParts.some(op => op.includes(o.toLowerCase())));
-    const mq = !filters.search || p.name.toLowerCase().includes(filters.search.toLowerCase()) || p.owner.toLowerCase().includes(filters.search.toLowerCase()) || p.obj.toLowerCase().includes(filters.search.toLowerCase());
+    const ownerNames = (p.ownerIds || []).map(id => team.find(m => m.id === id)?.name?.toLowerCase()).filter(Boolean);
+    const mo = filters.owner.length === 0 || filters.owner.some(o => ownerNames.some(n => n.includes(o.toLowerCase())));
+    const mq = !filters.search || p.name.toLowerCase().includes(filters.search.toLowerCase()) || p._ownerNames.toLowerCase().includes(filters.search.toLowerCase()) || p._objectiveLabel.toLowerCase().includes(filters.search.toLowerCase());
     return mv && ms && mo && mq;
   });
 
@@ -447,10 +455,17 @@ export default function OKRPage() {
   const atR = filt.filter(p => { const s = weekData[activeWeek]?.[p.id]?.status; return s === 'Delayed' || s === 'Blocked'; }).length;
   const hasFilters = filters.status.length > 0 || filters.owner.length > 0 || filters.vertical.length > 0 || filters.search || filters.sort !== 'default';
 
-  const allOwners = [...new Set(projects.flatMap(p => p.owner.split(/\/|,/).map(s => s.trim()).filter(Boolean)))].sort();
+  // Owner filter options from team
+  const allOwners = team.map(m => m.name).sort();
 
+  // Group by vertical → objective label
   const byV = {};
-  filt.forEach(p => { if (!byV[p.v]) byV[p.v] = {}; if (!byV[p.v][p.obj]) byV[p.v][p.obj] = []; byV[p.v][p.obj].push(p); });
+  filt.forEach(p => {
+    if (!byV[p.v]) byV[p.v] = {};
+    const objLabel = p._objectiveLabel || 'Other';
+    if (!byV[p.v][objLabel]) byV[p.v][objLabel] = [];
+    byV[p.v][objLabel].push(p);
+  });
 
   const ncols = tableCols.length;
 
@@ -461,8 +476,8 @@ export default function OKRPage() {
         <div className="week-title">Week of <span>{wk.label}</span></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => exportWeekPDF(wk, projects, weekData, tableCols)}>⬇ PDF</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => exportGoogleDoc(wk, projects, weekData)}>⬆ Google Doc</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => exportWeekPDF(wk, filt, weekData, tableCols)}>⬇ PDF</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => exportGoogleDoc(wk, filt, weekData)}>⬆ Google Doc</button>
           </div>
           <div className="week-stats">
             <div className="wstat"><div className="wstat-val" style={{ color: 'var(--green)' }}>{upd}</div><div className="wstat-label">updated</div></div>
@@ -501,7 +516,7 @@ export default function OKRPage() {
         <span className="filter-count">{total} project{total !== 1 ? 's' : ''}</span>
       </div>
 
-      {/* Vertical summary cards (when no filter active) */}
+      {/* Vertical summary cards */}
       {filters.vertical.length === 0 && filters.status.length === 0 && filters.owner.length === 0 && !filters.search && (
         <div className="summary-grid">
           {VORDER.map(k => {
@@ -542,14 +557,14 @@ export default function OKRPage() {
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(byV[v]).map(([obj, projs]) => (
-                  <React.Fragment key={obj}>
+                {Object.entries(byV[v]).map(([objLabel, projs]) => (
+                  <React.Fragment key={objLabel}>
                     <tr>
                       <td
                         colSpan={ncols}
                         style={{ background: m.color + '22', padding: '5px 10px', fontSize: 11, fontWeight: 600, color: m.color, fontFamily: 'var(--display)', letterSpacing: '.04em', border: '1px solid var(--rule)' }}
                       >
-                        {obj}
+                        {objLabel}
                       </td>
                     </tr>
                     {projs.map(p => (
@@ -563,6 +578,8 @@ export default function OKRPage() {
                         saveProjectField={saveProjectField}
                         saveUpdate={saveUpdate}
                         saveEngNotes={saveEngNotes}
+                        saveWeekFieldDirect={saveWeekFieldDirect}
+                        team={team}
                       />
                     ))}
                   </React.Fragment>
